@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import CandidateShell from "@/components/candidate/CandidateShell";
 import { WhiteBoxPanel } from "@/components/ui/WhiteBox";
 import { Button } from "@/components/ui/primitives";
-import { GoogleIcon, MicrosoftIcon, GithubIcon } from "@/components/ui/BrandIcons";
-import { ShieldCheck, ArrowRight, Mail } from "lucide-react";
+import { GoogleIcon, MicrosoftIcon } from "@/components/ui/BrandIcons";
+import { ShieldCheck, ArrowRight } from "lucide-react";
 
 export default function Register() {
   const router = useRouter();
@@ -69,7 +69,6 @@ export default function Register() {
             {[
               { label: "Continue with Google", Icon: GoogleIcon },
               { label: "Continue with Microsoft", Icon: MicrosoftIcon },
-              { label: "Continue with GitHub", Icon: GithubIcon },
             ].map((p) => (
               <button
                 key={p.label}

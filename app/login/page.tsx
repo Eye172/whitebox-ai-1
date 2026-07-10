@@ -7,13 +7,12 @@ import Cube from "@/components/ui/Cube";
 import CubeMark from "@/components/ui/CubeMark";
 import ContourBg from "@/components/ui/ContourBg";
 import { Button } from "@/components/ui/primitives";
-import { GoogleIcon, MicrosoftIcon, GithubIcon, OktaIcon } from "@/components/ui/BrandIcons";
+import { GoogleIcon, MicrosoftIcon } from "@/components/ui/BrandIcons";
 import { Mail, Lock, User, ArrowRight, ShieldCheck, KeyRound, Check, AlertCircle, Loader2 } from "lucide-react";
 
 const PROVIDERS = [
   { key: "google", label: "Continue with Google", Icon: GoogleIcon },
   { key: "microsoft", label: "Continue with Microsoft", Icon: MicrosoftIcon },
-  { key: "github", label: "Continue with GitHub", Icon: GithubIcon },
 ];
 
 function LoginInner() {
@@ -26,7 +25,7 @@ function LoginInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [consent, setConsent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => params.get("error"));
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
