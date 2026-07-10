@@ -2,16 +2,23 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { PRIMARY_NAV, VACANCY_SUBNAV, Settings } from "./shell-data";
 import { useRole } from "./RoleContext";
 import { getVacancy } from "@/lib/fixtures";
-import { PanelLeftClose, PanelLeftOpen, ChevronsUpDown } from "lucide-react";
+import { getSession, signOut } from "@/lib/auth";
+import { PanelLeftClose, PanelLeftOpen, ChevronsUpDown, LogOut, User, Palette } from "lucide-react";
+import CubeMark from "@/components/ui/CubeMark";
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { role } = useRole();
   const [collapsed, setCollapsed] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const session = getSession();
+  const displayName = session?.name ?? "R. Alvarez";
+  const initials = displayName.split(" ").map((s) => s[0]).slice(0, 2).join("");
 
   const vidMatch = pathname.match(/\/vacancies\/([^/]+)\//);
   const vid = vidMatch?.[1];
@@ -27,9 +34,7 @@ export default function Sidebar() {
       {/* Zone 1 — Control */}
       <div className="flex h-14 items-center gap-2 px-3">
         <Link href="/" className="flex items-center gap-2 overflow-hidden">
-          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center border border-white/60">
-            <span className="h-2 w-2 bg-white/80" />
-          </span>
+          <CubeMark size={26} />
           {!collapsed && <span className="wordmark truncate text-[12px] text-text-hi">WhiteBox</span>}
         </Link>
         {!collapsed && (
@@ -113,18 +118,49 @@ export default function Sidebar() {
           <Settings className="h-[18px] w-[18px] shrink-0" />
           {!collapsed && <span>Settings</span>}
         </Link>
-        <div className={`mt-1 flex items-center gap-2 rounded-[6px] px-3 py-2 ${collapsed ? "justify-center" : ""}`}>
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-hairline bg-surface-2 text-[11px] text-text-hi">
-            RA
-          </span>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[12.5px] text-text-hi">R. Alvarez</div>
-              <div className="mono text-[10px] text-text-lo">{role}</div>
-            </div>
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            className={`mt-1 flex w-full items-center gap-2 rounded-[6px] px-3 py-2 hover:bg-white/[0.03] ${collapsed ? "justify-center" : ""}`}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-hairline bg-surface-2 text-[11px] text-text-hi">
+              {initials}
+            </span>
+            {!collapsed && (
+              <div className="min-w-0 flex-1 text-left">
+                <div className="truncate text-[12.5px] text-text-hi">{displayName}</div>
+                <div className="mono text-[10px] text-text-lo">{role}</div>
+              </div>
+            )}
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute bottom-full left-2 z-20 mb-1 w-48 overflow-hidden rounded-md border border-hairline-strong bg-surface-2 py-1 shadow-2xl">
+                <MenuItem icon={User} label="Profile" onClick={() => setMenuOpen(false)} />
+                {/* menu items */}
+                <Link href="/hr/settings" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-mid hover:bg-white/[0.04] hover:text-text-hi">
+                  <Palette className="h-4 w-4" /> Appearance
+                </Link>
+                <div className="my-1 h-px bg-hairline" />
+                <MenuItem
+                  icon={LogOut}
+                  label="Sign out"
+                  onClick={() => { signOut(); router.replace("/login"); }}
+                />
+              </div>
+            </>
           )}
         </div>
       </div>
     </aside>
+  );
+}
+
+function MenuItem({ icon: Icon, label, onClick }: { icon: React.ElementType; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-text-mid hover:bg-white/[0.04] hover:text-text-hi">
+      <Icon className="h-4 w-4" /> {label}
+    </button>
   );
 }

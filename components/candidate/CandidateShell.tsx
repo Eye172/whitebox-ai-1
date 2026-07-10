@@ -2,6 +2,8 @@ import React from "react";
 import Link from "next/link";
 import { Globe, ShieldCheck } from "lucide-react";
 import ProgressRail from "./ProgressRail";
+import CubeMark from "@/components/ui/CubeMark";
+import ContourBg from "@/components/ui/ContourBg";
 
 export default function CandidateShell({
   children,
@@ -16,15 +18,14 @@ export default function CandidateShell({
 }) {
   return (
     <div className="relative min-h-screen bg-void text-text-hi">
-      {/* calm background — subtle contour, no graph-paper (that's HR register) */}
+      {/* calm background — subtle ink-flow contour (human-touch register), no graph-paper */}
+      <ContourBg variant="ink" opacity={0.05} fade="center" className="fixed" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(70%_50%_at_50%_-10%,rgba(123,147,255,0.08),transparent_60%)]" />
 
       {/* minimal top bar */}
       <header className="relative flex h-14 items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="inline-flex h-5 w-5 items-center justify-center border border-white/60">
-            <span className="h-1.5 w-1.5 bg-white/80" />
-          </span>
+          <CubeMark size={22} />
           <span className="wordmark text-[13px] text-text-hi">WhiteBox</span>
         </Link>
         <button className="mono flex items-center gap-1.5 text-[12px] text-text-lo hover:text-text-hi">

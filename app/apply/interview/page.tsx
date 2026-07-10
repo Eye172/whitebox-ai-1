@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CandidateShell from "@/components/candidate/CandidateShell";
 import Cube from "@/components/ui/Cube";
 import { Button } from "@/components/ui/primitives";
-import { Mic, MicOff, Pause, HelpCircle, Captions, Check } from "lucide-react";
+import { Mic, MicOff, Pause, HelpCircle, Captions, Check, CameraOff } from "lucide-react";
 
 const SCRIPT = [
   { q: "To start — tell me about a time you led a team through real ambiguity.", follow: false },
@@ -23,11 +23,36 @@ export default function Interview() {
   const [i, setI] = useState(0);
   const [muted, setMuted] = useState(false);
   const [captions, setCaptions] = useState(true);
+  const [camOn, setCamOn] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setPhase("asking"), 2200);
-    return () => clearTimeout(t);
+    // real self-view camera
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: true });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+        setCamOn(true);
+      } catch {
+        setCamOn(false);
+      }
+    })();
+    return () => {
+      clearTimeout(t);
+      streamRef.current?.getTracks().forEach((tr) => tr.stop());
+    };
   }, []);
+
+  // mute toggles the real audio track
+  useEffect(() => {
+    streamRef.current?.getAudioTracks().forEach((t) => (t.enabled = !muted));
+  }, [muted]);
 
   useEffect(() => {
     if (phase === "asking") {
@@ -96,9 +121,16 @@ export default function Interview() {
                 {phase === "thinking" && "thinking…"}
               </div>
             </div>
-            {/* self view */}
-            <div className="absolute bottom-3 right-3 flex h-16 w-24 items-center justify-center overflow-hidden rounded-[6px] border border-hairline bg-surface">
-              <span className="mono text-[10px] text-text-lo">you</span>
+            {/* self view — real camera */}
+            <div className="absolute bottom-3 right-3 flex h-20 w-28 items-center justify-center overflow-hidden rounded-[6px] border border-hairline bg-surface">
+              <video ref={videoRef} muted playsInline className={`h-full w-full -scale-x-100 object-cover ${camOn ? "" : "hidden"}`} />
+              {!camOn && (
+                <div className="flex flex-col items-center gap-1">
+                  <CameraOff className="h-3.5 w-3.5 text-text-lo" />
+                  <span className="mono text-[9px] text-text-lo">you</span>
+                </div>
+              )}
+              {camOn && <span className="mono absolute left-1 top-1 rounded bg-black/50 px-1 text-[8px] text-white">you</span>}
               {muted && <MicOff className="absolute bottom-1 right-1 h-3 w-3" style={{ color: "var(--neg)" }} />}
             </div>
           </div>

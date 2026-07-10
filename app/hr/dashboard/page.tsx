@@ -40,9 +40,12 @@ export default function Dashboard() {
                 <Plus className="h-4 w-4" /> Create vacancy
               </Button>
             </Link>
-            <Button size="md" variant="secondary">
+            <Link
+              href="/hr/settings"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-[4px] border border-hairline px-4 text-sm text-text-mid transition-all hover:border-hairline-strong hover:text-text-hi"
+            >
               <Download className="h-4 w-4" /> Import from ATS
-            </Button>
+            </Link>
           </div>
         </div>
         <div className="hidden shrink-0 md:block">

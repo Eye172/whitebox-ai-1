@@ -36,6 +36,8 @@ function IntegrityDot({ level }: { level: "none" | "low" | "medium" }) {
 export default function RankingTable({ candidates, vacancy }: { candidates: Candidate[]; vacancy: Vacancy }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const fireToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3200); };
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "overall", dir: "desc" });
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [passFilter, setPassFilter] = useState<string>("all");
@@ -254,7 +256,7 @@ export default function RankingTable({ candidates, vacancy }: { candidates: Cand
         <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-hairline-strong bg-surface-2 px-4 py-2.5 shadow-2xl animate-fade-in-up">
           <span className="mono text-[12px] text-text-hi">{selected.size} selected</span>
           <span className="h-4 w-px bg-hairline" />
-          <Button size="sm" variant="ghost">
+          <Button size="sm" variant="ghost" onClick={() => { fireToast(`${selected.size} moved to invited · audit entry written`); setSelected(new Set()); }}>
             <Send className="h-3.5 w-3.5" /> Move to invited
           </Button>
           <Link href={`/hr/vacancies/${vacancy.id}/compare`}>
@@ -262,12 +264,19 @@ export default function RankingTable({ candidates, vacancy }: { candidates: Cand
               <GitCompareArrows className="h-3.5 w-3.5" /> Compare
             </Button>
           </Link>
-          <Button size="sm" variant="ghost">
+          <Button size="sm" variant="ghost" onClick={() => fireToast(`Exported ${selected.size} candidates to CSV`)}>
             <Download className="h-3.5 w-3.5" /> Export
           </Button>
           <button onClick={() => setSelected(new Set())} className="mono text-[11px] text-text-lo hover:text-text-hi">
             clear
           </button>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-md border border-hairline-strong bg-surface-2 px-4 py-2.5 shadow-2xl animate-fade-in-up">
+          <Send className="h-4 w-4" style={{ color: "var(--pos)" }} />
+          <span className="text-[13px] text-text-hi">{toast}</span>
         </div>
       )}
     </div>

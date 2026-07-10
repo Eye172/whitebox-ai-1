@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRole } from "./RoleContext";
 import { ROLES } from "./shell-data";
 import { getVacancy } from "@/lib/fixtures";
-import { Search, Bell, HelpCircle, ChevronDown } from "lucide-react";
+import { Search, Bell, HelpCircle, ChevronDown, ScanEye, GitCompareArrows, FileCheck2, Keyboard, BookOpen, Sparkles, X } from "lucide-react";
 
 function useBreadcrumb() {
   const pathname = usePathname();
-  const parts = pathname.split("/").filter(Boolean); // e.g. hr, vacancies, v-teamlead, ranking
+  const parts = pathname.split("/").filter(Boolean);
   const crumbs: string[] = ["Acme Corp"];
   if (parts.includes("vacancies")) {
     const vid = parts[parts.indexOf("vacancies") + 1];
@@ -26,10 +27,26 @@ function useBreadcrumb() {
 }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ");
 
+const NOTIFICATIONS = [
+  { icon: ScanEye, color: "var(--neg)", title: "Bias anomaly flagged", body: "Pass-rate gap detected on 1 group in Team Lead.", time: "12m", href: "/hr/bias" },
+  { icon: GitCompareArrows, color: "var(--ember)", title: "AI↔human divergence rising", body: "M. Bianchi override-rate up to 28%.", time: "1h", href: "/hr/calibration" },
+  { icon: FileCheck2, color: "var(--pos)", title: "3 interviews scored", body: "New candidates ready for review in Team Lead.", time: "2h", href: "/hr/vacancies/v-teamlead/ranking" },
+];
+
+const SHORTCUTS = [
+  ["⌘K", "Command palette"],
+  ["/", "Focus search"],
+  ["G then D", "Go to dashboard"],
+  ["G then R", "Go to ranking"],
+  ["E", "Expand row / evidence"],
+];
+
 export default function TopBar() {
   const { role, setRole, setPaletteOpen } = useRole();
   const crumbs = useBreadcrumb();
   const searchRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState<null | "bell" | "help">(null);
+  const [unread, setUnread] = useState(true);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -37,6 +54,7 @@ export default function TopBar() {
         e.preventDefault();
         searchRef.current?.focus();
       }
+      if (e.key === "Escape") setOpen(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -44,7 +62,6 @@ export default function TopBar() {
 
   return (
     <header className="sticky top-0 z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-hairline bg-void/80 px-4 glass-blur">
-      {/* breadcrumb */}
       <div className="flex items-center gap-2 text-[13px]">
         {crumbs.map((c, i) => (
           <React.Fragment key={i}>
@@ -54,11 +71,11 @@ export default function TopBar() {
         ))}
       </div>
 
-      {/* search */}
       <div className="relative ml-4 hidden md:block">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-lo" />
         <input
           ref={searchRef}
+          onFocus={() => setPaletteOpen(true)}
           placeholder="Search candidates, vacancies…"
           className="h-8 w-[300px] rounded-[8px] border border-hairline bg-surface pl-8 pr-3 text-[13px] text-text-hi outline-none placeholder:text-text-lo focus:border-hairline-strong"
         />
@@ -66,7 +83,6 @@ export default function TopBar() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        {/* AI processing chip */}
         <div className="hidden items-center gap-2 rounded-full border border-hairline bg-surface px-2.5 py-1 lg:flex">
           <span className="relative flex h-1.5 w-1.5">
             <span className="iris-bar absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" />
@@ -75,7 +91,6 @@ export default function TopBar() {
           <span className="mono text-[11px] text-text-mid">AI processing 3 interviews</span>
         </div>
 
-        {/* ⌘K */}
         <button
           onClick={() => setPaletteOpen(true)}
           className="mono flex items-center gap-1 rounded-[4px] border border-hairline bg-surface px-2 py-1 text-[11px] text-text-lo hover:text-text-hi"
@@ -83,7 +98,6 @@ export default function TopBar() {
           ⌘K
         </button>
 
-        {/* role switcher (demo affordance) */}
         <div className="relative">
           <select
             value={role}
@@ -92,23 +106,89 @@ export default function TopBar() {
             title="Switch role (demo)"
           >
             {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
+              <option key={r} value={r}>{r}</option>
             ))}
           </select>
           <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-text-lo" />
         </div>
 
-        {/* notifications */}
-        <button className="relative text-text-lo hover:text-text-hi" title="Notifications">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full" style={{ background: "var(--ember)" }} />
-        </button>
-        <button className="text-text-lo hover:text-text-hi" title="Help">
-          <HelpCircle className="h-4 w-4" />
-        </button>
+        {/* Notifications */}
+        <div className="relative">
+          <button
+            onClick={() => { setOpen(open === "bell" ? null : "bell"); setUnread(false); }}
+            className="relative flex h-7 w-7 items-center justify-center rounded-[6px] text-text-lo hover:bg-white/5 hover:text-text-hi"
+            title="Notifications"
+          >
+            <Bell className="h-4 w-4" />
+            {unread && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full" style={{ background: "var(--ember)" }} />}
+          </button>
+          {open === "bell" && (
+            <Dropdown onClose={() => setOpen(null)} title="Notifications" action={<button className="mono text-[11px] text-text-lo hover:text-text-hi">mark all read</button>}>
+              {NOTIFICATIONS.map((n, i) => (
+                <Link key={i} href={n.href} onClick={() => setOpen(null)} className="flex gap-3 px-3 py-2.5 hover:bg-white/[0.03]">
+                  <n.icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: n.color }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] text-text-hi">{n.title}</div>
+                    <div className="text-[12px] leading-snug text-text-lo">{n.body}</div>
+                  </div>
+                  <span className="mono shrink-0 text-[10px] text-text-lo">{n.time}</span>
+                </Link>
+              ))}
+            </Dropdown>
+          )}
+        </div>
+
+        {/* Help */}
+        <div className="relative">
+          <button
+            onClick={() => setOpen(open === "help" ? null : "help")}
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-text-lo hover:bg-white/5 hover:text-text-hi"
+            title="Help"
+          >
+            <HelpCircle className="h-4 w-4" />
+          </button>
+          {open === "help" && (
+            <Dropdown onClose={() => setOpen(null)} title="Help & shortcuts">
+              <div className="px-3 py-2">
+                <div className="mono-label mb-2 flex items-center gap-1.5"><Keyboard className="h-3 w-3" /> Keyboard</div>
+                <div className="space-y-1">
+                  {SHORTCUTS.map(([k, label]) => (
+                    <div key={label} className="flex items-center justify-between text-[12.5px]">
+                      <span className="text-text-mid">{label}</span>
+                      <span className="mono rounded-[4px] border border-hairline px-1.5 py-0.5 text-[10px] text-text-lo">{k}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="my-1 h-px bg-hairline" />
+              <button onClick={() => { setOpen(null); setPaletteOpen(true); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-text-mid hover:bg-white/[0.03] hover:text-text-hi">
+                <Sparkles className="h-4 w-4" /> Open command palette
+              </button>
+              <a href="#" className="flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-mid hover:bg-white/[0.03] hover:text-text-hi">
+                <BookOpen className="h-4 w-4" /> Documentation
+              </a>
+            </Dropdown>
+          )}
+        </div>
       </div>
     </header>
+  );
+}
+
+function Dropdown({ title, action, children, onClose }: { title: string; action?: React.ReactNode; children: React.ReactNode; onClose: () => void }) {
+  return (
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <div className="absolute right-0 top-full z-40 mt-2 w-[320px] overflow-hidden rounded-md border border-hairline-strong bg-surface-2 shadow-2xl animate-fade-in-up">
+        <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
+          <span className="mono-label">{title}</span>
+          <div className="flex items-center gap-2">
+            {action}
+            <button onClick={onClose} className="text-text-lo hover:text-text-hi"><X className="h-3.5 w-3.5" /></button>
+          </div>
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto py-1">{children}</div>
+      </div>
+    </>
   );
 }

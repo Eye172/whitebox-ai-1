@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import CandidateShell from "@/components/candidate/CandidateShell";
 import { WhiteBoxPanel } from "@/components/ui/WhiteBox";
 import { Button } from "@/components/ui/primitives";
-import { ShieldCheck, ArrowRight } from "lucide-react";
+import { GoogleIcon, MicrosoftIcon, GithubIcon } from "@/components/ui/BrandIcons";
+import { ShieldCheck, ArrowRight, Mail } from "lucide-react";
 
 export default function Register() {
   const router = useRouter();
@@ -63,6 +64,29 @@ export default function Register() {
         </div>
 
         <div className="mx-auto max-w-sm space-y-3">
+          {/* provider options */}
+          <div className="space-y-2">
+            {[
+              { label: "Continue with Google", Icon: GoogleIcon },
+              { label: "Continue with Microsoft", Icon: MicrosoftIcon },
+              { label: "Continue with GitHub", Icon: GithubIcon },
+            ].map((p) => (
+              <button
+                key={p.label}
+                onClick={() => (mode === "signup" ? setDone(true) : router.push("/apply/profile"))}
+                className="flex w-full items-center gap-3 rounded-[8px] border border-hairline bg-surface px-4 py-2.5 text-[13.5px] text-text-hi transition-all hover:border-hairline-strong hover:bg-surface-2"
+              >
+                <p.Icon size={18} />
+                <span className="flex-1 text-left">{p.label}</span>
+                <ArrowRight className="h-3.5 w-3.5 text-text-lo" />
+              </button>
+            ))}
+          </div>
+          <div className="my-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-hairline" />
+            <span className="mono-label">or use email</span>
+            <span className="h-px flex-1 bg-hairline" />
+          </div>
           <Field label="Email" type="email" placeholder="you@example.com" />
           <Field label="Password" type="password" placeholder="••••••••" />
           {mode === "signup" && (

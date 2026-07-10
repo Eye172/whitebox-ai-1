@@ -355,42 +355,84 @@ button:focus-visible,
   align-items: center;
   justify-content: center;
 }
+.cube-rock {
+  position: relative;
+  transform-style: preserve-3d;
+  animation: cube-rock 16s ease-in-out infinite;
+}
 .cube {
   position: relative;
   transform-style: preserve-3d;
-  animation: cube-spin 26s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.28))
+    drop-shadow(0 0 30px rgba(150, 175, 255, 0.3));
 }
-@keyframes cube-spin {
-  from {
-    transform: rotateX(-24deg) rotateY(0deg);
+/* gentle corner-view rock — always a 3D volume, never a flat face */
+@keyframes cube-rock {
+  0% {
+    transform: rotateX(-26deg) rotateY(-38deg);
   }
-  to {
-    transform: rotateX(-24deg) rotateY(360deg);
+  50% {
+    transform: rotateX(-20deg) rotateY(-58deg);
+  }
+  100% {
+    transform: rotateX(-26deg) rotateY(-38deg);
   }
 }
 .cube-face {
   position: absolute;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.06),
-    rgba(123, 147, 255, 0.04)
-  );
-  backdrop-filter: blur(1px);
-  box-shadow: inset 0 0 24px rgba(180, 200, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
-.cube-glow {
+/* bright white bloom behind the cube */
+.cube-bloom {
   position: absolute;
-  inset: 0;
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(123, 147, 255, 0.4),
-    rgba(199, 123, 255, 0.12) 40%,
-    transparent 70%
+    rgba(255, 255, 255, 0.55),
+    rgba(220, 230, 255, 0.18) 32%,
+    transparent 66%
   );
-  filter: blur(18px);
-  animation: prism-drift 8s ease-in-out infinite;
+  filter: blur(22px);
+  animation: bloom-breathe 7s ease-in-out infinite;
+}
+/* iridescent refractive halo (the keycap's prism) */
+.cube-iris-halo {
+  position: absolute;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 200deg,
+    rgba(110, 231, 240, 0.22),
+    rgba(123, 147, 255, 0.22),
+    rgba(199, 123, 255, 0.22),
+    rgba(255, 138, 216, 0.22),
+    rgba(110, 231, 240, 0.22)
+  );
+  filter: blur(26px);
+  opacity: 0.8;
+  animation: halo-spin 12s linear infinite;
+}
+.cube-core {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff, rgba(200, 215, 255, 0.6) 60%, transparent);
+  filter: blur(3px);
+  transform: translateZ(0);
+  animation: bloom-breathe 4s ease-in-out infinite;
+}
+.cube-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+@keyframes bloom-breathe {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+@keyframes halo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -402,9 +444,9 @@ button:focus-visible,
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
-  .cube {
+  .cube-rock {
     animation: none;
-    transform: rotateX(-24deg) rotateY(-32deg);
+    transform: rotateX(-24deg) rotateY(-42deg);
   }
 }
 
