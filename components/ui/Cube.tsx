@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * The WhiteBox brand object — a 3D volume built from a STACK of white plates
- * (ref: DAILYMINIMAL No.639 fanned plates + exploded-cube layers, Book II §2.5).
- * Layers of white receding in depth = "you can see the layers the AI reasoned in."
- * Viewed at an angle and slowly turning so the depth between layers is obvious.
+ * The WhiteBox brand object — a real CUBE (equal width/height/depth) whose
+ * interior is filled with a stack of white layer-panels: "you can see the
+ * layers the AI reasoned in, inside a transparent white box."
+ * The outer 6-face frame makes the cube read as a cube; the inner panels are
+ * the layers. Slowly turns so all three dimensions are visible.
  * `pulse` = the calm listening/thinking state for the candidate interview.
  */
 export default function Cube({
   size = 120,
   pulse = false,
-  layers = 8,
+  layers = 6,
   className = "",
 }: {
   size?: number;
@@ -18,8 +19,24 @@ export default function Cube({
   layers?: number;
   className?: string;
 }) {
-  const gap = size * 0.19;
+  const half = size / 2;
+
+  // outer cube frame — 6 faces of an equal-sided cube
+  const faces = [
+    `translateZ(${half}px)`,
+    `rotateY(180deg) translateZ(${half}px)`,
+    `rotateY(90deg) translateZ(${half}px)`,
+    `rotateY(-90deg) translateZ(${half}px)`,
+    `rotateX(90deg) translateZ(${half}px)`,
+    `rotateX(-90deg) translateZ(${half}px)`,
+  ];
+
+  // inner layer-panels, stacked through the cube's depth, inset from the walls
+  const innerSide = size * 0.62;
+  const innerOffset = (size - innerSide) / 2;
+  const innerDepth = size * 0.74;
   const mid = (layers - 1) / 2;
+  const gap = innerDepth / (layers - 1);
 
   return (
     <div className={`cube-scene ${className}`} style={{ width: size * 1.9, height: size * 1.9 }} aria-hidden>
@@ -34,28 +51,37 @@ export default function Cube({
       )}
 
       <div className="cube-stack" style={{ width: size, height: size }}>
+        {/* outer cube frame (equal sides) */}
+        {faces.map((t, i) => (
+          <div key={`f${i}`} className="cube-face" style={{ transform: t }} />
+        ))}
+
+        {/* inner white layers, inside the cube */}
         {Array.from({ length: layers }).map((_, i) => {
           const z = (i - mid) * gap;
           const t = i / (layers - 1); // 0 back → 1 front
-          // near-transparent fills + bright crisp white EDGES → you clearly see
-          // every stacked layer receding in depth (never one solid square)
-          const fill = 0.04 + t * 0.07;
-          const edge = 0.5 + t * 0.5;
+          const fill = 0.05 + t * 0.07;
+          const edge = 0.55 + t * 0.4;
           return (
             <div
-              key={i}
+              key={`p${i}`}
               className="cube-plate"
               style={{
+                width: innerSide,
+                height: innerSide,
+                left: innerOffset,
+                top: innerOffset,
                 transform: `translateZ(${z}px)`,
                 background: `linear-gradient(145deg, rgba(255,255,255,${fill + 0.03}), rgba(255,255,255,${fill * 0.5}))`,
                 borderColor: `rgba(255,255,255,${edge})`,
-                boxShadow: `0 0 ${size * 0.06}px rgba(200,215,255,${0.1 + t * 0.16})`,
+                boxShadow: `0 0 ${size * 0.05}px rgba(200,215,255,${0.1 + t * 0.14})`,
               }}
             />
           );
         })}
-        {/* luminous iridescent core between the layers */}
-        <div className="cube-core" style={{ width: size * 0.34, height: size * 0.34, top: size * 0.33, left: size * 0.33 }} />
+
+        {/* luminous iridescent core at the cube's center */}
+        <div className="cube-core" style={{ width: size * 0.28, height: size * 0.28, top: size * 0.36, left: size * 0.36 }} />
       </div>
     </div>
   );

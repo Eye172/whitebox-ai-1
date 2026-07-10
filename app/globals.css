@@ -362,11 +362,19 @@ button:focus-visible,
   transform-style: preserve-3d;
   animation: stack-turn 18s ease-in-out infinite;
 }
-.cube-plate {
+/* outer cube frame — quiet walls so the inner layers are the hero */
+.cube-face {
   position: absolute;
   inset: 0;
+  border: 1.2px solid rgba(255, 255, 255, 0.26);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.014);
+}
+/* inner white layer-panels (dimensions set inline) */
+.cube-plate {
+  position: absolute;
   border: 1.4px solid rgba(255, 255, 255, 0.6);
-  border-radius: 6px;
+  border-radius: 5px;
 }
 /* turn between two angled views — always shows layered depth, never flat */
 @keyframes stack-turn {
