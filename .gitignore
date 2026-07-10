@@ -24,6 +24,10 @@ yarn-error.log*
 .env
 .env*.local
 
+# local sql database (runtime data)
+/data/*.db
+/data/*.db-*
+
 # typescript
 *.tsbuildinfo
 

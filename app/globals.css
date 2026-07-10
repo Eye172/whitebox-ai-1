@@ -355,69 +355,65 @@ button:focus-visible,
   align-items: center;
   justify-content: center;
 }
-.cube-rock {
+/* the stack of white plates — rotates so the depth between layers is visible.
+   NOTE: no `filter` here — filter flattens preserve-3d and collapses the layers. */
+.cube-stack {
   position: relative;
   transform-style: preserve-3d;
-  animation: cube-rock 16s ease-in-out infinite;
+  animation: stack-turn 18s ease-in-out infinite;
 }
-.cube {
-  position: relative;
-  transform-style: preserve-3d;
-  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.28))
-    drop-shadow(0 0 30px rgba(150, 175, 255, 0.3));
+.cube-plate {
+  position: absolute;
+  inset: 0;
+  border: 1.4px solid rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
 }
-/* gentle corner-view rock — always a 3D volume, never a flat face */
-@keyframes cube-rock {
+/* turn between two angled views — always shows layered depth, never flat */
+@keyframes stack-turn {
   0% {
-    transform: rotateX(-26deg) rotateY(-38deg);
+    transform: rotateX(-14deg) rotateY(-46deg);
   }
   50% {
-    transform: rotateX(-20deg) rotateY(-58deg);
+    transform: rotateX(-20deg) rotateY(-66deg);
   }
   100% {
-    transform: rotateX(-26deg) rotateY(-38deg);
+    transform: rotateX(-14deg) rotateY(-46deg);
   }
 }
-.cube-face {
-  position: absolute;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-}
-/* bright white bloom behind the cube */
+/* soft bloom behind the cube — subtle, so the layers stay legible */
 .cube-bloom {
   position: absolute;
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(255, 255, 255, 0.55),
-    rgba(220, 230, 255, 0.18) 32%,
-    transparent 66%
+    rgba(200, 215, 255, 0.16),
+    rgba(150, 175, 255, 0.06) 40%,
+    transparent 68%
   );
-  filter: blur(22px);
+  filter: blur(30px);
   animation: bloom-breathe 7s ease-in-out infinite;
 }
-/* iridescent refractive halo (the keycap's prism) */
+/* iridescent refractive halo (the keycap's prism) — dim */
 .cube-iris-halo {
   position: absolute;
   border-radius: 50%;
   background: conic-gradient(
     from 200deg,
-    rgba(110, 231, 240, 0.22),
-    rgba(123, 147, 255, 0.22),
-    rgba(199, 123, 255, 0.22),
-    rgba(255, 138, 216, 0.22),
-    rgba(110, 231, 240, 0.22)
+    rgba(110, 231, 240, 0.14),
+    rgba(123, 147, 255, 0.14),
+    rgba(199, 123, 255, 0.14),
+    rgba(255, 138, 216, 0.14),
+    rgba(110, 231, 240, 0.14)
   );
-  filter: blur(26px);
-  opacity: 0.8;
-  animation: halo-spin 12s linear infinite;
+  filter: blur(30px);
+  opacity: 0.6;
+  animation: halo-spin 14s linear infinite;
 }
 .cube-core {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(circle, #fff, rgba(200, 215, 255, 0.6) 60%, transparent);
-  filter: blur(3px);
+  background: radial-gradient(circle, #fff, rgba(199, 123, 255, 0.5) 45%, rgba(123, 147, 255, 0.3) 70%, transparent);
+  filter: blur(5px);
   transform: translateZ(0);
   animation: bloom-breathe 4s ease-in-out infinite;
 }
@@ -444,9 +440,9 @@ button:focus-visible,
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
-  .cube-rock {
+  .cube-stack {
     animation: none;
-    transform: rotateX(-24deg) rotateY(-42deg);
+    transform: rotateX(-18deg) rotateY(-42deg);
   }
 }
 

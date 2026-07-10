@@ -1,10 +1,9 @@
 import React from "react";
 
 /**
- * WhiteBox logo mark — a small luminous white isometric cube outline.
- * White edges + faint face highlight + iris refractive accent + glow.
- * All instances are identical, so they share fixed gradient ids (hydration-safe,
- * no hooks) — renders correctly in both server and client components.
+ * WhiteBox logo mark — a SOLID WHITE isometric cube (white faces, dark edges),
+ * with a faint iris core showing "through" it. Predominantly white, as the brand
+ * demands. Fixed gradient ids (hydration-safe, no hooks).
  */
 export default function CubeMark({ size = 22, glow = true }: { size?: number; glow?: boolean }) {
   return (
@@ -14,31 +13,21 @@ export default function CubeMark({ size = 22, glow = true }: { size?: number; gl
       viewBox="0 0 40 40"
       fill="none"
       aria-hidden
-      style={glow ? { filter: `drop-shadow(0 0 3px rgba(180,200,255,0.55))` } : undefined}
+      style={glow ? { filter: `drop-shadow(0 0 3px rgba(200,215,255,0.6))` } : undefined}
     >
-      <defs>
-        <linearGradient id="wb-cm-top" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ffffff" stopOpacity="0.9" />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0.35" />
-        </linearGradient>
-        <linearGradient id="wb-cm-edge" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#8fb0ff" />
-          <stop offset="0.5" stopColor="#c77bff" />
-          <stop offset="1" stopColor="#ff8ad8" />
-        </linearGradient>
-      </defs>
-      {/* isometric cube: top rhombus + two side faces */}
-      <path d="M20 4 L34 12 L20 20 L6 12 Z" fill="url(#wb-cm-top)" fillOpacity="0.5" />
-      <path d="M6 12 L20 20 L20 36 L6 28 Z" fill="#ffffff" fillOpacity="0.08" />
-      <path d="M34 12 L20 20 L20 36 L34 28 Z" fill="#ffffff" fillOpacity="0.14" />
-      {/* edges (bright white) */}
-      <g stroke="#ffffff" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" opacity="0.92">
-        <path d="M20 4 L34 12 L20 20 L6 12 Z" />
-        <path d="M6 12 L6 28 L20 36 L34 28 L34 12" />
-        <path d="M20 20 L20 36" />
+      {/* solid faces — top brightest, right mid, left slightly darker (3D shading) */}
+      <path d="M20 3 L35 11.5 L20 20 L5 11.5 Z" fill="#ffffff" />
+      <path d="M35 11.5 L35 28.5 L20 37 L20 20 Z" fill="#d7dbe4" />
+      <path d="M5 11.5 L5 28.5 L20 37 L20 20 Z" fill="#eef0f5" />
+      {/* iris core seen through the translucent front */}
+      <circle cx="20" cy="21" r="4.2" fill="#c77bff" opacity="0.5" />
+      <circle cx="20" cy="21" r="2.2" fill="#ffffff" opacity="0.8" />
+      {/* dark edges (vice-versa of the old outline) */}
+      <g stroke="#0a0a0c" strokeWidth="1.1" strokeLinejoin="round" strokeLinecap="round" opacity="0.55">
+        <path d="M20 3 L35 11.5 L20 20 L5 11.5 Z" />
+        <path d="M5 11.5 L5 28.5 L20 37 L35 28.5 L35 11.5" />
+        <path d="M20 20 L20 37" />
       </g>
-      {/* iris refractive edge accent */}
-      <path d="M20 4 L34 12 L34 28" stroke="url(#wb-cm-edge)" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" opacity="0.75" fill="none" />
     </svg>
   );
 }

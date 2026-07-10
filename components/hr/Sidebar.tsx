@@ -6,19 +6,24 @@ import { usePathname, useRouter } from "next/navigation";
 import { PRIMARY_NAV, VACANCY_SUBNAV, Settings } from "./shell-data";
 import { useRole } from "./RoleContext";
 import { getVacancy } from "@/lib/fixtures";
-import { getSession, signOut } from "@/lib/auth";
+import type { SessionUser } from "./HRShell";
 import { PanelLeftClose, PanelLeftOpen, ChevronsUpDown, LogOut, User, Palette } from "lucide-react";
 import CubeMark from "@/components/ui/CubeMark";
 
-export default function Sidebar() {
+export default function Sidebar({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   const router = useRouter();
   const { role } = useRole();
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const session = getSession();
-  const displayName = session?.name ?? "R. Alvarez";
-  const initials = displayName.split(" ").map((s) => s[0]).slice(0, 2).join("");
+  const displayName = user.name;
+  const initials = displayName.split(/[\s@.]+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
+
+  const doSignOut = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  };
 
   const vidMatch = pathname.match(/\/vacancies\/([^/]+)\//);
   const vid = vidMatch?.[1];
@@ -143,11 +148,7 @@ export default function Sidebar() {
                   <Palette className="h-4 w-4" /> Appearance
                 </Link>
                 <div className="my-1 h-px bg-hairline" />
-                <MenuItem
-                  icon={LogOut}
-                  label="Sign out"
-                  onClick={() => { signOut(); router.replace("/login"); }}
-                />
+                <MenuItem icon={LogOut} label="Sign out" onClick={doSignOut} />
               </div>
             </>
           )}
