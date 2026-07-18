@@ -1,217 +1,148 @@
-import React from "react";
-import type { ConfidenceBand, Tier, DocStatus, VacancyStatus } from "@/lib/types";
-import { ShieldCheck, ShieldAlert, ShieldQuestion } from "lucide-react";
+import type { ConfidenceBand, Tier, VerificationStatus, VacancyStatus } from "@/lib/fixtures";
 
-/* ---------- Section label (mono uppercase) ---------- */
-export function MonoLabel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`mono-label ${className}`}>{children}</div>;
-}
-
-/* ---------- Status pill (pastel tint + leading dot + mono) ---------- */
-const PILL: Record<string, { fg: string; bg: string; dot: string }> = {
-  DRAFT: { fg: "#c8c8ce", bg: "rgba(200,200,206,0.10)", dot: "#9a9a9e" },
-  LIVE: { fg: "#7fe3b0", bg: "rgba(70,208,138,0.12)", dot: "#46d08a" },
-  CLOSED: { fg: "#a6a6ab", bg: "rgba(120,120,128,0.10)", dot: "#6a6a70" },
-  VERIFIED: { fg: "#7fe3b0", bg: "rgba(70,208,138,0.12)", dot: "#46d08a" },
-  PENDING: { fg: "#f0cf87", bg: "rgba(232,169,59,0.12)", dot: "#e8a93b" },
-  NOT_VERIFIED: { fg: "#f0a0a2", bg: "rgba(229,72,77,0.10)", dot: "#e5484d" },
-  FLAGGED: { fg: "#f0a0a2", bg: "rgba(229,72,77,0.12)", dot: "#e5484d" },
-  CONNECTED: { fg: "#7fe3b0", bg: "rgba(70,208,138,0.12)", dot: "#46d08a" },
-  ERROR: { fg: "#f0a0a2", bg: "rgba(229,72,77,0.12)", dot: "#e5484d" },
-  NONE: { fg: "#6a6a70", bg: "rgba(120,120,128,0.08)", dot: "#55555a" },
+/* Status pill — pastel tint + bold mono label + leading dot (Book I · Part IV) */
+const pillTones: Record<string, string> = {
+  DRAFT: "text-mid bg-white/5",
+  LIVE: "text-pos bg-pos/10",
+  CLOSED: "text-lo bg-white/5",
+  VERIFIED: "text-pos bg-pos/10",
+  PENDING: "text-warn bg-warn/10",
+  FLAGGED: "text-neg bg-neg/10",
+  "—": "text-lo bg-white/5",
 };
 
-export function StatusPill({ status, label }: { status: string; label?: string }) {
-  const s = PILL[status] ?? PILL.DRAFT;
-  const text = label ?? status.replace("_", " ");
+export function StatusPill({ label }: { label: VacancyStatus | VerificationStatus | string }) {
   return (
-    <span
-      className="mono inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] uppercase tracking-wide"
-      style={{ color: s.fg, background: s.bg }}
-    >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: s.dot }} />
-      {text}
-    </span>
-  );
-}
-
-export function DocPill({ status }: { status: DocStatus }) {
-  if (status === "NONE") return <span className="mono text-[11px] text-text-lo">—</span>;
-  return <StatusPill status={status} />;
-}
-
-/* ---------- Tier badge ---------- */
-export function TierBadge({ tier }: { tier: Tier }) {
-  const map = {
-    Top: { fg: "#7fe3b0", bd: "rgba(70,208,138,0.4)" },
-    Mid: { fg: "#c8c8ce", bd: "rgba(255,255,255,0.16)" },
-    Bottom: { fg: "#9a9a9e", bd: "rgba(255,255,255,0.10)" },
-  }[tier];
-  return (
-    <span
-      className="mono rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase tracking-wider"
-      style={{ color: map.fg, borderColor: map.bd }}
-    >
-      {tier}
-    </span>
-  );
-}
-
-/* ---------- Confidence badge (color + icon + WORD, never bare number) ---------- */
-export function ConfidenceBadge({ band, size = "sm" }: { band: ConfidenceBand; size?: "sm" | "md" }) {
-  const map = {
-    High: { fg: "var(--pos)", Icon: ShieldCheck, bg: "rgba(70,208,138,0.10)" },
-    Med: { fg: "var(--warn)", Icon: ShieldQuestion, bg: "rgba(232,169,59,0.10)" },
-    Low: { fg: "var(--neg)", Icon: ShieldAlert, bg: "rgba(229,72,77,0.10)" },
-  }[band];
-  const { Icon } = map;
-  const label = band === "Med" ? "Medium" : band;
-  return (
-    <span
-      className={`mono inline-flex items-center gap-1.5 rounded-full ${size === "md" ? "px-2.5 py-1 text-[12px]" : "px-2 py-0.5 text-[11px]"} uppercase tracking-wide`}
-      style={{ color: map.fg, background: map.bg }}
-    >
-      <Icon className={size === "md" ? "h-3.5 w-3.5" : "h-3 w-3"} />
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold tracking-[0.08em] ${pillTones[label] ?? "text-mid bg-white/5"}`}>
+      <span className="size-1 rounded-full bg-current" />
       {label}
     </span>
   );
 }
 
-/* ---------- Corner-bracket card ---------- */
-export function CornerCard({
-  children,
-  className = "",
-  as: Tag = "div",
-  ...rest
-}: {
-  children: React.ReactNode;
-  className?: string;
-  as?: React.ElementType;
-  [key: string]: unknown;
-}) {
+export function TierBadge({ tier }: { tier: Tier }) {
+  const tone = tier === "Top" ? "border-hairline-strong text-hi" : tier === "Mid" ? "border-hairline text-mid" : "border-hairline text-lo";
   return (
-    <Tag
-      className={`hud-card rounded-md border border-hairline bg-surface transition-all duration-300 ${className}`}
-      {...rest}
-    >
-      {children}
-    </Tag>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[11px] tracking-[0.08em] uppercase ${tone}`}>
+      {tier === "Top" && <span className="size-1 rounded-full iris-line" />}
+      {tier}
+    </span>
   );
 }
 
-/* ---------- KPI tile ---------- */
-export function KpiTile({
-  label,
-  value,
-  unit,
-  trend,
-  negative,
-  spark,
-}: {
-  label: string;
-  value: string | number;
-  unit?: string;
-  trend?: number;
-  negative?: boolean;
-  spark?: number[];
-}) {
+/* Confidence — color + icon + word, never a bare % (Book I · Part VIII.2) */
+const confTone: Record<ConfidenceBand, { cls: string; icon: string }> = {
+  High: { cls: "text-pos", icon: "◆" },
+  Medium: { cls: "text-warn", icon: "◈" },
+  Low: { cls: "text-neg", icon: "◇" },
+};
+
+export function ConfidenceBadge({ band, compact }: { band: ConfidenceBand; compact?: boolean }) {
+  const t = confTone[band];
   return (
-    <div className="rounded-md border border-hairline bg-surface p-4">
-      <div className="mono-label mb-2 truncate">{label}</div>
-      <div className="flex items-end justify-between gap-2">
-        <div className="flex items-baseline gap-1">
-          <span
-            className="metric text-[28px] leading-none"
-            style={{ color: negative ? "var(--neg)" : "var(--text-hi)" }}
-          >
-            {value}
-          </span>
-          {unit && <span className="mono text-xs text-text-lo">{unit}</span>}
-        </div>
-        {typeof trend === "number" && (
-          <span
-            className="mono text-[11px]"
-            style={{ color: trend >= 0 ? "var(--pos)" : "var(--neg)" }}
-          >
-            {trend >= 0 ? "▲" : "▼"} {Math.abs(trend)}%
-          </span>
-        )}
-      </div>
-      {spark && <Sparkline data={spark} className="mt-3 h-6 w-full" />}
-    </div>
+    <span className={`inline-flex items-center gap-1 font-mono text-[11px] tracking-[0.08em] uppercase ${t.cls}`}>
+      <span aria-hidden>{t.icon}</span>
+      {compact ? band : `${band} confidence`}
+    </span>
   );
 }
 
-/* ---------- Sparkline ---------- */
-export function Sparkline({ data, className = "", color = "var(--iris-b)" }: { data: number[]; className?: string; color?: string }) {
-  if (!data.length) return null;
-  const w = 100;
-  const h = 24;
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const pts = data
-    .map((d, i) => `${(i / (data.length - 1)) * w},${h - ((d - min) / range) * h}`)
-    .join(" ");
+/* Score cell — micro-bar + tabular number, threshold-colored (Book III · §5) */
+export function ScoreCell({ score, threshold }: { score: number; threshold: number }) {
+  const passed = score >= threshold;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className={className}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
-/* ---------- Score cell (micro-bar + tabular number, threshold-colored) ---------- */
-export function ScoreCell({ score, threshold = 70, width = 84 }: { score: number; threshold?: number; width?: number }) {
-  const pass = score >= threshold;
-  const color = pass ? "var(--pos)" : "var(--text-mid)";
-  return (
-    <div className="flex items-center gap-2">
-      <div className="relative h-1.5 overflow-hidden rounded-full bg-white/5" style={{ width }}>
-        <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${score}%`, background: color, opacity: pass ? 1 : 0.7 }} />
-        <div className="absolute inset-y-0 w-px bg-white/25" style={{ left: `${threshold}%` }} />
-      </div>
-      <span className="tnum mono w-7 text-right text-[13px]" style={{ color: pass ? "var(--text-hi)" : "var(--text-mid)" }}>
-        {score}
+    <div className="flex items-center gap-2.5">
+      <span className={`tnum font-mono text-[13px] ${passed ? "text-hi" : "text-mid"}`}>{score}</span>
+      <span className="relative h-1 w-14 overflow-hidden rounded-full bg-white/8">
+        <span
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{ width: `${score}%`, backgroundColor: passed ? "var(--pos)" : "var(--line-mid)" }}
+        />
       </span>
     </div>
   );
 }
 
-/* ---------- Skeleton primitives ---------- */
-export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`skeleton ${className}`} />;
-}
-
-/* ---------- Button ---------- */
-export function Button({
-  children,
-  variant = "primary",
-  size = "md",
-  className = "",
-  ...rest
-}: {
-  children: React.ReactNode;
-  variant?: "primary" | "secondary" | "ghost" | "destructive";
-  size?: "sm" | "md" | "lg";
-} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  const sizes = { sm: "h-8 px-3 text-[13px]", md: "h-9 px-4 text-sm", lg: "h-11 px-5 text-sm" };
-  const base =
-    "inline-flex items-center justify-center gap-2 rounded-[4px] font-medium transition-all duration-150 disabled:opacity-40 disabled:pointer-events-none whitespace-nowrap";
-  const variants = {
-    primary:
-      "bg-surface-2 border border-hairline-strong text-text-hi hover:iris-border hover:text-white",
-    secondary: "border border-hairline text-text-mid hover:text-text-hi hover:border-hairline-strong",
-    ghost: "text-text-mid hover:text-text-hi hover:bg-white/5",
-    destructive: "text-neg border border-transparent hover:bg-[rgba(229,72,77,0.08)]",
-  };
+/* 1-line sparkline (KPI tiles, mini-scores) */
+export function Sparkline({ data, w = 64, h = 18, stroke = "var(--line-strong)" }: { data: number[]; w?: number; h?: number; stroke?: string }) {
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const span = max - min || 1;
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - 2 - ((v - min) / span) * (h - 4)}`).join(" ");
   return (
-    <button className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...rest}>
-      {children}
-    </button>
+    <svg width={w} height={h} className="shrink-0" aria-hidden>
+      <polyline points={pts} fill="none" stroke={stroke} strokeWidth="1" />
+    </svg>
   );
 }
 
-/* ---------- Vacancy status alias ---------- */
-export function VacancyStatusPill({ status }: { status: VacancyStatus }) {
-  return <StatusPill status={status} />;
+/* Compact per-competency dot-strip (ranking table) */
+export function MiniScores({ scores, threshold }: { scores: { name: string; score: number }[]; threshold: number }) {
+  return (
+    <div className="flex items-end gap-1" title={scores.map((s) => `${s.name}: ${s.score}`).join(" · ")}>
+      {scores.map((s) => (
+        <span
+          key={s.name}
+          className="w-1.5 rounded-[1px]"
+          style={{
+            height: `${4 + (s.score / 100) * 14}px`,
+            backgroundColor: s.score >= threshold ? "var(--line-strong)" : "var(--line-soft)",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* The glowing white cube — brand anchor, pure CSS (static fallback register) */
+export function Cube({ size = 72, dim }: { size?: number; dim?: boolean }) {
+  const s = size;
+  return (
+    <div className={`cube-glow relative ${dim ? "opacity-40" : ""}`} style={{ width: s, height: s }} aria-hidden>
+      <svg viewBox="0 0 100 100" width={s} height={s}>
+        <defs>
+          <linearGradient id="cubeTop" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+            <stop offset="100%" stopColor="rgba(236,236,238,0.75)" />
+          </linearGradient>
+          <linearGradient id="cubeIris" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#6EE7F0" stopOpacity="0.5" />
+            <stop offset="40%" stopColor="#7B93FF" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#FF8AD8" stopOpacity="0.45" />
+          </linearGradient>
+        </defs>
+        {/* top face */}
+        <polygon points="50,8 88,28 50,48 12,28" fill="url(#cubeTop)" />
+        {/* left face — translucent, light passes through */}
+        <polygon points="12,28 50,48 50,92 12,72" fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.55)" strokeWidth="0.75" />
+        {/* right face — the prism moment */}
+        <polygon points="88,28 50,48 50,92 88,72" fill="url(#cubeIris)" stroke="rgba(255,255,255,0.55)" strokeWidth="0.75" />
+        {/* inner wireframe: the layers you can see into */}
+        <polyline points="50,48 50,8" stroke="rgba(255,255,255,0.5)" strokeWidth="0.5" />
+        <polygon points="50,26 69,36 50,46 31,36" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="0.5" />
+        <polygon points="50,40 62,46 50,52 38,46" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.5" />
+      </svg>
+    </div>
+  );
+}
+
+/* KPI tile (Book I · Part IV) */
+export function KpiTile({ label, value, trend, spark, alert }: { label: string; value: number; trend: number; spark: number[]; alert?: boolean }) {
+  const negTrend = trend < 0;
+  return (
+    <div className="brackets card-hover rounded-xl border border-hairline bg-surface p-5">
+      <div className="hud-label">{label}</div>
+      <div className="mt-2 flex items-end justify-between gap-2">
+        <span className={`tnum font-medium text-[28px] leading-none ${alert && value > 0 ? "text-neg" : "text-hi"}`}>
+          {Number.isInteger(value) ? value : value.toFixed(1)}
+        </span>
+        <Sparkline data={spark} stroke={alert ? "var(--neg)" : "var(--line-mid)"} />
+      </div>
+      {trend !== 0 && (
+        <div className={`tnum mt-2 font-mono text-[11px] ${negTrend ? (alert ? "text-pos" : "text-neg") : alert ? "text-neg" : "text-pos"}`}>
+          {negTrend ? "▾" : "▴"} {Math.abs(trend)}%
+        </div>
+      )}
+    </div>
+  );
 }

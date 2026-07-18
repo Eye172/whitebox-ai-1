@@ -1,495 +1,195 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "../styles/tokens.css";
 
-/* ============================================================
-   WHITEBOX AI — DESIGN TOKENS (Book I · Part III)
-   Dark base · white-on-top · invertible white-box · iridescent
-   ============================================================ */
-:root {
-  /* 3.1 Color — base (dark theme) */
-  --void: #060608;
-  --void-2: #0a0a0c;
-  --surface: #0e0e11;
-  --surface-2: #141418;
-  --hairline: rgba(255, 255, 255, 0.06);
-  --hairline-strong: rgba(255, 255, 255, 0.12);
-  --grid-line: rgba(255, 255, 255, 0.03);
-
-  /* 3.2 Color — text & lines */
-  --paper: #ffffff;
-  --text-hi: #ececee;
-  --text-mid: #a6a6ab;
-  --text-lo: #6a6a70;
-  --text-disabled: #3a3a40;
-  --line-strong: #9a9a9e;
-  --line-mid: #55555a;
-  --line-soft: #2a2a2e;
-
-  /* 3.3 Color — inverted "white box" */
-  --wb-paper: #f4f4f2;
-  --wb-ink: #0a0a0c;
-  --wb-text: #17171a;
-  --wb-hairline: rgba(0, 0, 0, 0.1);
-
-  /* 3.4 Accent — iridescent primary (+ swaps) */
-  --iris-a: #6ee7f0;
-  --iris-b: #7b93ff;
-  --iris-c: #c77bff;
-  --iris-d: #ff8ad8;
-  --iris-gradient: linear-gradient(120deg, #6ee7f0, #7b93ff, #c77bff, #ff8ad8);
-  --iris-conic: conic-gradient(
-    from 210deg,
-    #6ee7f0,
-    #7b93ff,
-    #c77bff,
-    #ff8ad8,
-    #6ee7f0
-  );
-  --ember: #ff6a2e;
-  --dune-gold: #c9a86a;
-
-  /* Accent role tokens — flip one var to re-skin the product */
-  --accent-primary: var(--iris-gradient);
-  --accent-primary-solid: #7b93ff;
-  --accent-action: var(--ember);
-
-  /* 3.5 Color — semantic */
-  --pos: #46d08a;
-  --neg: #e5484d;
-  --warn: #e8a93b;
-  --info: #7b93ff;
-
-  /* 3.6 Typography */
-  --font-display: "Space Grotesk", "PP Neue Montreal", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", "Geist Mono", ui-monospace, monospace;
-
-  /* 3.7 Spacing / radii */
-  --r-xs: 4px;
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-pill: 9999px;
-
-  color-scheme: dark;
-}
-
-/* ---- Accent swap themes (single-variable re-skin) ---- */
-:root[data-accent="dune"] {
-  --accent-primary: linear-gradient(120deg, #c9a86a, #b8935a, #d8c090);
-  --accent-primary-solid: #c9a86a;
-}
-:root[data-accent="ember"] {
-  --accent-primary: linear-gradient(120deg, #ff8a4c, #ff6a2e, #ff4d2e);
-  --accent-primary-solid: #ff6a2e;
-}
-
-/* ============================================================
-   BASE
-   ============================================================ */
-* {
-  border-color: var(--hairline);
-  box-sizing: border-box;
+@theme inline {
+  --color-void: var(--void);
+  --color-void2: var(--void-2);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface-2);
+  --color-paper: var(--paper);
+  --color-hi: var(--text-hi);
+  --color-mid: var(--text-mid);
+  --color-lo: var(--text-lo);
+  --color-disabled: var(--text-disabled);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-line-soft: var(--line-soft);
+  --color-wbpaper: var(--wb-paper);
+  --color-wbink: var(--wb-ink);
+  --color-irisa: var(--iris-a);
+  --color-irisb: var(--iris-b);
+  --color-irisc: var(--iris-c);
+  --color-irisd: var(--iris-d);
+  --color-ember: var(--ember);
+  --color-dune: var(--dune-gold);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains);
+  --font-display: var(--font-space);
+  --font-serif: var(--font-instrument);
 }
 
 html {
-  scroll-behavior: smooth;
-}
-
-body {
   background: var(--void);
   color: var(--text-hi);
-  font-family: var(--font-body);
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  min-height: 100vh;
 }
 
 ::selection {
-  background: rgba(123, 147, 255, 0.28);
-  color: #fff;
+  background: color-mix(in srgb, var(--iris-b) 35%, transparent);
 }
 
-/* Numbers */
-.tnum {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-}
+/* ---- signature utilities ---------------------------------- */
 
-/* ---- Scrollbars ---- */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 9999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.16);
-  background-clip: content-box;
-}
-
-/* ============================================================
-   TYPOGRAPHY HELPERS
-   ============================================================ */
-.font-display {
-  font-family: var(--font-display);
-  letter-spacing: -0.02em;
-}
-.mono {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-.mono-label {
-  font-family: var(--font-mono);
+/* mono micro-label — the "trust001 / security" HUD language */
+.hud-label {
+  font-family: var(--font-jetbrains), monospace;
   font-size: 11px;
-  text-transform: uppercase;
   letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text-lo);
 }
-.h1 {
-  font-family: var(--font-display);
-  font-size: clamp(32px, 4vw, 56px);
-  letter-spacing: -0.02em;
-  line-height: 1.02;
-  font-weight: 600;
-}
-.h2 {
-  font-family: var(--font-display);
-  font-size: clamp(24px, 3vw, 40px);
-  letter-spacing: -0.015em;
-  line-height: 1.08;
-  font-weight: 600;
-}
-.h3 {
-  font-family: var(--font-display);
-  font-size: clamp(19px, 2vw, 28px);
-  letter-spacing: -0.01em;
-  line-height: 1.15;
-  font-weight: 500;
-}
-.metric {
-  font-family: var(--font-display);
+
+.tnum {
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.wordmark {
-  font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
 }
 
-/* ============================================================
-   ACCENT / IRIDESCENT UTILITIES
-   ============================================================ */
+/* graph-paper grid under "engineering" surfaces */
+.grid-paper {
+  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* topographic contour texture (material refs) at low opacity */
+.contour-bg {
+  position: relative;
+  isolation: isolate;
+}
+.contour-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: url("/textures/contour-hud.jpeg");
+  background-size: 900px;
+  opacity: 0.06;
+  pointer-events: none;
+}
+.contour-bg-soft::before {
+  background-image: url("/textures/contour.jpeg");
+  opacity: 0.04;
+}
+
+/* concrete/speckle grain so white never reads sterile */
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* iridescent hairline — accent is light, not paint */
+.iris-line {
+  background: var(--iris-gradient);
+}
 .iris-text {
   background: var(--iris-gradient);
   -webkit-background-clip: text;
   background-clip: text;
-  -webkit-text-fill-color: transparent;
   color: transparent;
 }
-.iris-bar {
-  background: var(--accent-primary);
-}
-.iris-border {
-  position: relative;
-}
-.iris-border::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: var(--accent-primary);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0.7;
-  pointer-events: none;
+
+/* focus ring = 1px iris + faint outer bloom */
+.iris-focus:focus-visible,
+.iris-focus:focus-within {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--iris-b),
+    0 0 12px 0 color-mix(in srgb, var(--iris-b) 30%, transparent);
 }
 
-/* ============================================================
-   TEXTURES — grid / contour / grain (Book I · Part III.8)
-   ============================================================ */
-.tex-grid {
-  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-.tex-grid-fine {
-  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 12px 12px;
-}
-.tex-grain {
+/* corner-bracket L-marks — signature HUD hover detail */
+.brackets {
   position: relative;
 }
-.tex-grain::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
-  opacity: 0.035;
-  pointer-events: none;
-  mix-blend-mode: overlay;
-}
-/* speckle on white-box surfaces */
-.wb .tex-grain::before,
-.wb.tex-grain::before {
-  opacity: 0.06;
-  mix-blend-mode: multiply;
-}
-
-/* ============================================================
-   INVERTED WHITE-BOX SCOPE (Book I · Part IV — signature)
-   ============================================================ */
-.wb {
-  background: var(--wb-paper);
-  color: var(--wb-text);
-  position: relative;
-  overflow: hidden;
-}
-.wb-hairline {
-  border-color: var(--wb-hairline);
-}
-.wb .mono-label {
-  color: rgba(23, 23, 26, 0.55);
-}
-.wb-wire {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.5;
-}
-
-/* ============================================================
-   CORNER-BRACKET HUD MARKS (card hover signature)
-   ============================================================ */
-.hud-card {
-  position: relative;
-}
-.hud-card::before,
-.hud-card::after {
+.brackets::before,
+.brackets::after {
   content: "";
   position: absolute;
   width: 0;
   height: 0;
-  border: 1px solid transparent;
-  transition: all 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  border: 0 solid var(--line-strong);
+  transition: width 0.18s ease, height 0.18s ease, opacity 0.18s ease;
+  opacity: 0;
   pointer-events: none;
 }
-.hud-card::before {
-  top: 8px;
-  left: 8px;
-  border-top-color: transparent;
-  border-left-color: transparent;
+.brackets::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 1px;
+  border-left-width: 1px;
 }
-.hud-card::after {
-  bottom: 8px;
-  right: 8px;
+.brackets::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
 }
-.hud-card:hover::before {
-  width: 14px;
-  height: 14px;
-  border-top-color: var(--iris-b);
-  border-left-color: var(--iris-b);
-}
-.hud-card:hover::after {
-  width: 14px;
-  height: 14px;
-  border-bottom-color: var(--iris-c);
-  border-right-color: var(--iris-c);
+.brackets:hover::before,
+.brackets:hover::after {
+  width: 16px;
+  height: 16px;
+  opacity: 1;
 }
 
-/* ============================================================
-   FOCUS RING (iris)
-   ============================================================ */
-.focus-iris:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-button:focus-visible,
-[tabindex]:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--iris-b), 0 0 0 4px rgba(123, 147, 255, 0.15);
+/* interactive card hover — hairline → iris-tinted, lift */
+.card-hover {
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--iris-b) 40%, var(--hairline-strong));
 }
 
-/* ============================================================
-   SKELETON / SHIMMER (Book III · §0.5)
-   ============================================================ */
+/* glowing white cube (brand anchor) — pure CSS, static-friendly */
+.cube-glow {
+  filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.25))
+    drop-shadow(0 0 64px rgba(123, 147, 255, 0.18));
+}
+
+@keyframes prism-drift {
+  0%, 100% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(40deg); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
 .skeleton {
-  position: relative;
-  overflow: hidden;
-  background: var(--surface-2);
-  border-radius: 6px;
-}
-.skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.05),
-    transparent
-  );
-  animation: shimmer 1.4s infinite;
-}
-
-/* ============================================================
-   THE GLOWING CUBE (CSS 3D — brand object, no WebGL)
-   ============================================================ */
-.cube-scene {
-  perspective: 900px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-/* the stack of white plates — rotates so the depth between layers is visible.
-   NOTE: no `filter` here — filter flattens preserve-3d and collapses the layers. */
-.cube-stack {
-  position: relative;
-  transform-style: preserve-3d;
-  animation: stack-turn 18s ease-in-out infinite;
-}
-/* outer cube frame — quiet walls so the inner layers are the hero */
-.cube-face {
-  position: absolute;
-  inset: 0;
-  border: 1.2px solid rgba(255, 255, 255, 0.26);
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.2s linear infinite;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.014);
-}
-/* inner white layer-panels (dimensions set inline) */
-.cube-plate {
-  position: absolute;
-  border: 1.4px solid rgba(255, 255, 255, 0.6);
-  border-radius: 5px;
-}
-/* turn between two angled views — always shows layered depth, never flat */
-@keyframes stack-turn {
-  0% {
-    transform: rotateX(-14deg) rotateY(-46deg);
-  }
-  50% {
-    transform: rotateX(-20deg) rotateY(-66deg);
-  }
-  100% {
-    transform: rotateX(-14deg) rotateY(-46deg);
-  }
-}
-/* soft bloom behind the cube — subtle, so the layers stay legible */
-.cube-bloom {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(200, 215, 255, 0.16),
-    rgba(150, 175, 255, 0.06) 40%,
-    transparent 68%
-  );
-  filter: blur(30px);
-  animation: bloom-breathe 7s ease-in-out infinite;
-}
-/* iridescent refractive halo (the keycap's prism) — dim */
-.cube-iris-halo {
-  position: absolute;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 200deg,
-    rgba(110, 231, 240, 0.14),
-    rgba(123, 147, 255, 0.14),
-    rgba(199, 123, 255, 0.14),
-    rgba(255, 138, 216, 0.14),
-    rgba(110, 231, 240, 0.14)
-  );
-  filter: blur(30px);
-  opacity: 0.6;
-  animation: halo-spin 14s linear infinite;
-}
-.cube-core {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff, rgba(199, 123, 255, 0.5) 45%, rgba(123, 147, 255, 0.3) 70%, transparent);
-  filter: blur(5px);
-  transform: translateZ(0);
-  animation: bloom-breathe 4s ease-in-out infinite;
-}
-.cube-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-}
-@keyframes bloom-breathe {
-  0%, 100% { opacity: 0.75; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.06); }
-}
-@keyframes halo-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
   }
-  .cube-stack {
-    animation: none;
-    transform: rotateX(-18deg) rotateY(-42deg);
-  }
-}
-
-/* ============================================================
-   MISC UTILITIES
-   ============================================================ */
-.hairline {
-  border: 1px solid var(--hairline);
-}
-.hairline-t {
-  border-top: 1px solid var(--hairline);
-}
-.hairline-b {
-  border-bottom: 1px solid var(--hairline);
-}
-.hairline-r {
-  border-right: 1px solid var(--hairline);
-}
-.hairline-l {
-  border-left: 1px solid var(--hairline);
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.glass-blur {
-  backdrop-filter: blur(14px) saturate(120%);
-  -webkit-backdrop-filter: blur(14px) saturate(120%);
-}
-.link-underline {
-  background-image: linear-gradient(currentColor, currentColor);
-  background-size: 0% 1px;
-  background-position: 0 100%;
-  background-repeat: no-repeat;
-  transition: background-size 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.link-underline:hover {
-  background-size: 100% 1px;
 }
