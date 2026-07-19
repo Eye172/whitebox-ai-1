@@ -100,27 +100,10 @@ export function Cube({ size = 72, dim }: { size?: number; dim?: boolean }) {
   return (
     <div className={`cube-glow relative ${dim ? "opacity-40" : ""}`} style={{ width: s, height: s }} aria-hidden>
       <svg viewBox="0 0 100 100" width={s} height={s}>
-        <defs>
-          <linearGradient id="cubeTop" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
-            <stop offset="100%" stopColor="rgba(236,236,238,0.75)" />
-          </linearGradient>
-          <linearGradient id="cubeIris" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#6EE7F0" stopOpacity="0.5" />
-            <stop offset="40%" stopColor="#7B93FF" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#FF8AD8" stopOpacity="0.45" />
-          </linearGradient>
-        </defs>
-        {/* top face */}
-        <polygon points="50,8 88,28 50,48 12,28" fill="url(#cubeTop)" />
-        {/* left face — translucent, light passes through */}
-        <polygon points="12,28 50,48 50,92 12,72" fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.55)" strokeWidth="0.75" />
-        {/* right face — the prism moment */}
-        <polygon points="88,28 50,48 50,92 88,72" fill="url(#cubeIris)" stroke="rgba(255,255,255,0.55)" strokeWidth="0.75" />
-        {/* inner wireframe: the layers you can see into */}
-        <polyline points="50,48 50,8" stroke="rgba(255,255,255,0.5)" strokeWidth="0.5" />
-        <polygon points="50,26 69,36 50,46 31,36" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="0.5" />
-        <polygon points="50,40 62,46 50,52 38,46" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.5" />
+        {/* plain white cube — solid faces, edge lines only */}
+        <polygon points="50,8 88,28 50,48 12,28" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="0.75" strokeLinejoin="round" />
+        <polygon points="12,28 50,48 50,92 12,72" fill="#E9E9EC" stroke="#FFFFFF" strokeWidth="0.75" strokeLinejoin="round" />
+        <polygon points="88,28 50,48 50,92 88,72" fill="#D8D8DC" stroke="#FFFFFF" strokeWidth="0.75" strokeLinejoin="round" />
       </svg>
     </div>
   );

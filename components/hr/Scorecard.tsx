@@ -32,7 +32,7 @@ function Radar({ comps }: { comps: CompetencyScore[] }) {
         const [x, y] = pt(i, R);
         return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--line-soft)" strokeWidth="0.5" />;
       })}
-      <polygon points={data} fill="rgba(123,147,255,0.12)" stroke="var(--iris-b)" strokeWidth="1.25" />
+      <polygon points={data} fill="rgba(255,106,46,0.12)" stroke="var(--iris-b)" strokeWidth="1.25" />
       {comps.map((c, i) => {
         const [x, y] = pt(i, (c.score / 100) * R);
         return <circle key={c.id} cx={x} cy={y} r="2" fill="var(--iris-a)" />;
