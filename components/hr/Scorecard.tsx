@@ -51,7 +51,7 @@ function Radar({ comps }: { comps: CompetencyScore[] }) {
 }
 
 /* ---------- evidence chip + anchored popover (Perplexity model) ---------- */
-function EvidenceChips({ evidence }: { evidence: EvidenceSpan[] }) {
+function EvidenceChips({ evidence, onOpenTranscript }: { evidence: EvidenceSpan[]; onOpenTranscript: () => void }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
     <div className="relative flex flex-wrap gap-2">
@@ -73,7 +73,7 @@ function EvidenceChips({ evidence }: { evidence: EvidenceSpan[] }) {
           <p className="mt-2 text-[13px] leading-relaxed text-hi">“{evidence[open].quote}”</p>
           <p className="mt-2 text-[12px] text-lo">Q: {evidence[open].question}</p>
           <div className="mt-3 flex items-center justify-between">
-            <button className="text-[12px] text-mid hover:text-hi">Open in transcript →</button>
+            <button onClick={onOpenTranscript} className="text-[12px] text-mid hover:text-hi">Open in transcript →</button>
             <div className="flex gap-1">
               <button onClick={() => setOpen((open - 1 + evidence.length) % evidence.length)} className="rounded border border-hairline px-2 text-[12px] text-mid">‹</button>
               <button onClick={() => setOpen((open + 1) % evidence.length)} className="rounded border border-hairline px-2 text-[12px] text-mid">›</button>
@@ -86,7 +86,7 @@ function EvidenceChips({ evidence }: { evidence: EvidenceSpan[] }) {
 }
 
 /* ---------- one competency block: the explainability heart ---------- */
-function CompetencyBlock({ comp }: { comp: CompetencyScore }) {
+function CompetencyBlock({ comp, onOpenTranscript }: { comp: CompetencyScore; onOpenTranscript: () => void }) {
   const [open, setOpen] = useState(comp.id === "leadership");
   const [traceOpen, setTraceOpen] = useState(false);
   const [confOpen, setConfOpen] = useState(false);
@@ -142,7 +142,7 @@ function CompetencyBlock({ comp }: { comp: CompetencyScore }) {
           {/* Evidence chips */}
           <div className="mt-4">
             <div className="hud-label mb-2">EVIDENCE · INTERVIEW FRAGMENTS</div>
-            <EvidenceChips evidence={comp.evidence} />
+            <EvidenceChips evidence={comp.evidence} onOpenTranscript={onOpenTranscript} />
           </div>
 
           {/* Collapsible reasoning trace — "Completed N steps" */}
@@ -174,6 +174,7 @@ function HitlInspector({ c }: { c: Candidate }) {
   const [action, setAction] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [logged, setLogged] = useState<string[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const needsReason = action === "Change" || action === "Reject";
   const commit = () => {
     if (!action || (needsReason && reason.trim().length < 8)) return;
@@ -183,25 +184,17 @@ function HitlInspector({ c }: { c: Candidate }) {
   };
 
   const actions = [
-    { label: "Accept", icon: Check },
-    { label: "Change", icon: Pencil },
-    { label: "Recompute", icon: RefreshCw },
-    { label: "Reject", icon: X },
+    { label: "Accept", value: "Accept", icon: Check },
+    { label: "Adjust score", value: "Change", icon: Pencil },
+    { label: "Rescore", value: "Recompute", icon: RefreshCw },
+    { label: "Reject", value: "Reject", icon: X },
   ];
 
   return (
-    <aside className="sticky top-[76px] h-fit w-[340px] shrink-0 rounded-xl border border-hairline bg-surface">
-      <div className="relative overflow-hidden border-b border-hairline p-5">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-15"
-          style={{ backgroundImage: "url(/textures/halftone-hand.jpeg)" }}
-        />
-        <div className="relative">
-          <div className="hud-label">TRUST001 · HUMAN DECISION</div>
-          <p className="mt-1.5 text-[12px] leading-relaxed text-mid">
-            Confirm and override carry equal weight. Change / Reject require a reason — written to the append-only audit chain.
-          </p>
-        </div>
+    <aside className="sticky top-[76px] h-fit w-[310px] shrink-0 rounded-xl border border-hairline bg-surface">
+      <div className="border-b border-hairline p-5">
+        <div className="text-[14px] font-medium text-hi">Human decision</div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-mid">Choose an action. Adjustments and rejections require a reason.</p>
       </div>
 
       <div className="p-5">
@@ -210,9 +203,9 @@ function HitlInspector({ c }: { c: Candidate }) {
           {actions.map((a) => (
             <button
               key={a.label}
-              onClick={() => setAction(action === a.label ? null : a.label)}
+              onClick={() => setAction(action === a.value ? null : a.value)}
               className={`flex h-10 items-center justify-center gap-2 rounded border text-[13px] transition-colors ${
-                action === a.label
+                action === a.value
                   ? "border-irisb/60 bg-surface2 text-hi"
                   : "border-hairline-strong bg-surface2 text-hi hover:border-irisb/40"
               }`}
@@ -240,13 +233,16 @@ function HitlInspector({ c }: { c: Candidate }) {
             disabled={needsReason && reason.trim().length < 8}
             className="mt-3 w-full rounded border border-hairline-strong bg-surface2 py-2 text-[13px] text-hi transition-colors hover:border-irisb/50 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Commit “{action}” to audit chain
+            Confirm decision
           </button>
         )}
 
         <div className="mt-5 border-t border-hairline pt-4">
-          <div className="hud-label mb-2.5">ACTIVITY · APPEND-ONLY</div>
-          <div className="space-y-2.5">
+          <button onClick={() => setShowHistory((value) => !value)} aria-expanded={showHistory} className="flex w-full items-center justify-between text-[11px] text-mid hover:text-hi">
+            <span>Decision history</span>
+            <span>{showHistory ? "Hide" : `${logged.length + c.audit.length} entries`}</span>
+          </button>
+          {showHistory && <div className="mt-3 space-y-2.5">
             {logged.map((l, i) => (
               <p key={i} className="font-mono text-[10.5px] leading-relaxed text-ember">{l}</p>
             ))}
@@ -256,7 +252,7 @@ function HitlInspector({ c }: { c: Candidate }) {
                 {a.reason && <span className="text-mid"> · “{a.reason}”</span>} · {a.hash}
               </p>
             ))}
-          </div>
+          </div>}
         </div>
       </div>
     </aside>
@@ -265,6 +261,7 @@ function HitlInspector({ c }: { c: Candidate }) {
 
 /* ---------- tabs content ---------- */
 function Overview({ c }: { c: Candidate }) {
+  const [revealed, setRevealed] = useState(false);
   return (
     <div className="grid grid-cols-[1fr_1fr] gap-6">
       <div className="rounded-xl border border-hairline bg-surface p-6">
@@ -277,10 +274,11 @@ function Overview({ c }: { c: Candidate }) {
               <span className="font-mono text-[11px] text-lo">APPLIED {c.appliedAt}</span>
             </div>
           </div>
-          <button className="flex items-center gap-1.5 rounded border border-hairline px-2.5 py-1.5 font-mono text-[11px] text-lo hover:text-mid">
-            <Lock className="size-3" /> REVEAL IDENTITY
+          <button onClick={() => setRevealed((v) => !v)} className="flex items-center gap-1.5 rounded border border-hairline px-2.5 py-1.5 font-mono text-[11px] text-lo hover:text-mid">
+            <Lock className="size-3" /> {revealed ? "HIDE IDENTITY" : "REVEAL IDENTITY"}
           </button>
         </div>
+        {revealed && <div className="mt-4 rounded-lg border border-warn/25 bg-warn/5 p-3 text-[11px] text-warn">Identity revealed: Dana Chen · reveal event logged for this review session.</div>}
         <div className="mt-6 flex items-end gap-4">
           <span className="tnum font-display text-[56px] font-medium leading-none text-hi">{c.overall}</span>
           <div className="pb-1.5">
@@ -314,19 +312,32 @@ function Overview({ c }: { c: Candidate }) {
 
 function Interview({ c }: { c: Candidate }) {
   const lines = c.competencies.flatMap((k) => k.evidence.map((e) => ({ ...e, comp: k.name })));
+  const [selectedLine, setSelectedLine] = useState(0);
+  const selected = lines[selectedLine];
   return (
     <div className="grid grid-cols-[3fr_2fr] gap-6">
       <div className="flex aspect-video items-center justify-center rounded-xl border border-hairline bg-void2">
         <div className="text-center">
           <div className="mx-auto size-10 rounded-full border border-hairline-strong pl-[3px] pt-[7px] text-[18px] text-mid">▶</div>
           <div className="hud-label mt-3">INTERVIEW RECORDING · 47:12</div>
+          {selected && (
+            <div className="mx-auto mt-4 max-w-md px-6">
+              <div className="font-mono text-[10px] text-irisc">PLAYHEAD · {selected.timestamp} · {selected.comp.toUpperCase()}</div>
+              <p className="mt-2 text-[12px] leading-relaxed text-mid">“{selected.quote}”</p>
+            </div>
+          )}
         </div>
       </div>
       <div className="rounded-xl border border-hairline bg-surface p-5">
         <div className="hud-label mb-3">SYNCED TRANSCRIPT · PER-QUESTION</div>
         <div className="space-y-4">
           {lines.map((l, i) => (
-            <button key={i} className="block w-full text-left hover:bg-white/[0.02]">
+            <button
+              key={i}
+              aria-pressed={selectedLine === i}
+              onClick={() => setSelectedLine(i)}
+              className={`block w-full rounded px-2 py-1.5 text-left transition-colors ${selectedLine === i ? "bg-irisa/10" : "hover:bg-white/[0.02]"}`}
+            >
               <div className="font-mono text-[10px] text-lo">{l.timestamp} · {l.comp.toUpperCase()}</div>
               <p className="mt-0.5 text-[13px] leading-relaxed text-mid">“{l.quote}”</p>
             </button>
@@ -444,7 +455,7 @@ export default function Scorecard({ candidate }: { candidate: Candidate }) {
         {tab === "Overview" && <Overview c={candidate} />}
         {tab === "Competencies" && (
           <div className="space-y-3">
-            {candidate.competencies.map((comp) => <CompetencyBlock key={comp.id} comp={comp} />)}
+            {candidate.competencies.map((comp) => <CompetencyBlock key={comp.id} comp={comp} onOpenTranscript={() => setTab("Interview")} />)}
           </div>
         )}
         {tab === "Interview" && <Interview c={candidate} />}

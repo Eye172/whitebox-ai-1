@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Mic, MicOff, CircleHelp } from "lucide-react";
 import { Cube } from "@/components/ui/primitives";
 import { competitions, type Competition } from "@/lib/fixtures";
+import { findCompetitionByCode } from "@/lib/store";
 import type { InterviewStepResponse, InterviewTurn } from "@/lib/ai";
 
 type Phase = "connecting" | "thinking" | "asking" | "answering" | "complete";
@@ -28,8 +29,32 @@ function LiveInterview() {
   const historyRef = useRef<InterviewTurn[]>([]);
 
   useEffect(() => {
-    const published = JSON.parse(localStorage.getItem("wbx-published") ?? "{}");
-    const c: Competition | undefined = competitions[code] ?? published[code];
+    const stored = findCompetitionByCode(code);
+    let c: Competition | undefined = competitions[code];
+    if (!c && stored) {
+      if ("v2" in stored) {
+        c = {
+          vacancyId: stored.v2.id,
+          title: stored.v2.profile.title,
+          code: stored.v2.code,
+          competencies: stored.v2.categories.flatMap((category) =>
+            category.attributes.map((attribute) => ({
+              name: attribute.name,
+              weight: Math.round((category.weight * attribute.weight) / 100),
+            })),
+          ),
+          entry: "interview",
+        };
+      } else {
+        c = {
+          vacancyId: stored.legacy.vacancyId ?? "vac-legacy",
+          title: stored.legacy.title,
+          code: stored.legacy.code,
+          competencies: stored.legacy.competencies,
+          entry: stored.legacy.entry === "status" ? "status" : "interview",
+        };
+      }
+    }
     if (!c) { router.replace("/"); return; }
     setComp(c);
   }, [code, router]);
@@ -154,7 +179,7 @@ function LiveInterview() {
             </h1>
             <p className="mt-3 text-[15px] leading-relaxed text-mid">{current?.closing}</p>
             <button
-              onClick={() => router.push("/status")}
+              onClick={() => router.push(`/status?code=${comp.code}`)}
               className="mt-7 rounded-lg border border-hairline-strong bg-surface2 px-7 py-3 text-[15px] text-hi transition-colors hover:border-irisb/50"
             >
               Track my status

@@ -4,20 +4,25 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Cube } from "@/components/ui/primitives";
 import { competitions } from "@/lib/fixtures";
+import { findCompetitionByCode } from "@/lib/store";
 
 /* Code Entry — Book IV · §1. One action, calm, cube-lit. */
 export default function CodeEntry() {
   const [code, setCode] = useState("");
   const [notFound, setNotFound] = useState(false);
+  const [help, setHelp] = useState(false);
   const router = useRouter();
   const valid = useMemo(() => /^WBX-[A-Z0-9]{4}$/.test(code), [code]);
 
   const enter = () => {
     if (!valid) return;
-    const published = JSON.parse(localStorage.getItem("wbx-published") ?? "{}");
-    const comp = competitions[code] ?? published[code];
-    if (!comp) { setNotFound(true); return; }
-    router.push(comp.entry === "status" ? "/status" : `/interview/check?code=${code}`);
+    const fixture = competitions[code];
+    const stored = findCompetitionByCode(code);
+    if (!fixture && !stored) { setNotFound(true); return; }
+    const goesToStatus =
+      fixture?.entry === "status" ||
+      (!fixture && stored && "legacy" in stored && stored.legacy.entry === "status");
+    router.push(goesToStatus ? "/status" : `/interview/check?code=${code}`);
   };
 
   return (
@@ -60,7 +65,17 @@ export default function CodeEntry() {
         </button>
       </form>
 
-      <button className="mt-5 text-[13px] text-lo hover:text-mid">I don’t have a code</button>
+      <button onClick={() => setHelp(true)} className="mt-5 text-[13px] text-lo hover:text-mid">I don’t have a code</button>
+      {help && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) setHelp(false); }}>
+          <div className="w-full max-w-md rounded-xl border border-hairline-strong bg-surface2 p-6">
+            <h2 className="font-display text-[21px] text-hi">Where to find your code</h2>
+            <p className="mt-3 text-[13px] leading-relaxed text-mid">Your employer includes the eight-character code in the invitation email, SMS, job post, or QR landing page. It starts with WBX-.</p>
+            <p className="mt-3 text-[12px] text-lo">If it is missing or expired, ask the recruiter who invited you. WhiteBox cannot identify the vacancy from personal details.</p>
+            <button onClick={() => setHelp(false)} className="mt-5 rounded-lg border border-hairline-strong px-4 py-2 text-[12px] text-hi">Got it</button>
+          </div>
+        </div>
+      )}
       <p className="mt-10 max-w-[42ch] text-center font-mono text-[10.5px] leading-relaxed tracking-[0.06em] text-lo">
         WHITEBOX EVALUATES CANDIDATES FAIRLY AND TRANSPARENTLY.
         <br />

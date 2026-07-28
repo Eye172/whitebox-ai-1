@@ -19,3 +19,6 @@ next-env.d.ts
 
 # screenshots
 /screenshots
+
+# local development process logs
+/.codex-dev*.log

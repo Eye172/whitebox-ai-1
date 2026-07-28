@@ -5,6 +5,12 @@
    ============================================================ */
 
 :root {
+  /* System-first stacks keep production builds deterministic and offline-safe. */
+  --font-inter: Inter, "Segoe UI", Arial, sans-serif;
+  --font-jetbrains: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  --font-space: "Space Grotesk", "Segoe UI", Arial, sans-serif;
+  --font-instrument: "Instrument Serif", Georgia, serif;
+
   /* 3.1 — base (dark theme) */
   --void: #060608;
   --void-2: #0a0a0c;
