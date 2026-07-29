@@ -3,75 +3,28 @@
 /* Vacancy Studio state — SPEC §4. One draft VacancyV2, persisted locally,
    consumed by every step surface via useStudio(). Steps are a left rail,
    not a forced wizard: `step` is navigation only; the preflight validator
-   (lib/studio.ts) is the only gatekeeper to publishing. */
+   (lib/studio.ts) is the only gatekeeper to publishing.
+
+   Everything a half-finished vacancy needs to survive a page change lives in
+   this one persisted envelope — the draft itself, which entry mode was chosen,
+   which step was open, and whether the candidate preview has been reviewed.
+   Leaving for another surface and coming back resumes exactly where you were. */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { VacancyV2 } from "@/lib/types";
 import { STORE_KEYS } from "@/lib/types";
+import { createEmptyDraft } from "@/lib/studio";
 
-export function createEmptyDraft(): VacancyV2 {
-  return {
-    id: "vac-draft",
-    code: "",
-    status: "DRAFT",
-    configVersion: 1,
-    profile: {
-      title: "",
-      openings: 1,
-      seniority: "Middle",
-      employmentType: "full_time",
-      workMode: "hybrid",
-      locations: [],
-      mission: "",
-      responsibilities: [],
-      industryPack: "tech",
-      languages: { primary: "en", alternates: [] },
-    },
-    categories: [],
-    pipeline: [],
-    scoring: {
-      topology: "hybrid",
-      weighting: "rational",
-      threshold: 65,
-      banding: { enabled: false, sedWidth: 4 },
-      tieBreakers: ["focus_attributes"],
-      anonymization: { maskPII: true, revealAtStage: "decision" },
-      abstainPolicy: { minEvidencePerAttribute: 1, onAbstain: "flag_human" },
-      normalization: "absolute_rubric",
-    },
-    experience: {
-      landing: { showCompensation: false, companyBlurb: "" },
-      notices: {
-        jurisdictionProfile: "EU",
-        aiDisclosure:
-          "Parts of this process are AI-assisted. Only the language content of your answers is scored — never your face, voice tone, appearance, or emotion. A named human reviews and decides.",
-        retentionDays: 180,
-        consentCheckpoints: ["entry", "recorded_blocks"],
-        version: 1,
-      },
-      comms: {
-        confirmationEnabled: true,
-        reminderCadence: 2,
-        dispositionSlaDays: 5,
-        feedbackOffer: true,
-        senderIdentity: "org",
-      },
-      tone: "neutral",
-    },
-    governance: {
-      roles: [{ userId: "u-ar", name: "a.rakhimova", role: "Owner", piiReveal: true }],
-      reviewPolicy: { independentReviews: 1, assignment: "round_robin" },
-      calibrationRequired: true,
-      dualControlThreshold: 25,
-      slaTargets: { reviewQueueHours: 48, dispositionDays: 5 },
-      changeControl: { editLive: ["Owner"], pauseClose: ["Owner", "HiringManager"] },
-    },
-    distribution: [],
-    window: { opensAt: "", closesAt: "", timezone: "Asia/Almaty" },
-    rollingReview: true,
-    audit: [],
-    createdAt: "",
-  };
+export { createEmptyDraft };
+
+interface StudioSession {
+  draft: VacancyV2;
+  entered: boolean;
+  step: number;
+  /* Publishing requires the author to have looked at what candidates see.
+     Persisted with the draft so navigating away never silently revokes it. */
+  previewedAt?: string;
+  savedAt?: string;
 }
 
 interface StudioCtx {
@@ -85,6 +38,12 @@ interface StudioCtx {
   /* false until the user picks an entry mode (Describe / Manual / Preset / Clone) */
   entered: boolean;
   setEntered: (b: boolean) => void;
+  previewedAt: string | null;
+  markPreviewed: () => void;
+  /* null until the first local save of this session — drives the "saved" chip */
+  savedAt: string | null;
+  /* false during the first paint, before localStorage has been read */
+  hydrated: boolean;
 }
 
 const Ctx = createContext<StudioCtx | null>(null);
@@ -95,37 +54,71 @@ export function useStudio(): StudioCtx {
   return ctx;
 }
 
+/* Read the persisted session without mounting the provider — lets other
+   surfaces (vacancy list, dashboard) offer "resume your draft". */
+export function readStudioSession(): StudioSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORE_KEYS.draft);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as Partial<StudioSession>;
+    return saved?.draft ? { entered: false, step: 1, ...saved, draft: saved.draft } : null;
+  } catch {
+    return null; // corrupted draft — behave as if there is none
+  }
+}
+
+export function clearStudioSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORE_KEYS.draft);
+  } catch {
+    /* storage unavailable — nothing to clear */
+  }
+}
+
 export default function StudioProvider({ children }: { children: React.ReactNode }) {
   const [draft, setDraft] = useState<VacancyV2>(createEmptyDraft);
   const [step, setStep] = useState(1);
   const [entered, setEntered] = useState(false);
-  const hydrated = useRef(false);
+  const [previewedAt, setPreviewedAt] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  /* Guards the save effect. A ref, not state, because the save effect must see
+     the flip in the very same commit that restores the draft — otherwise the
+     empty initial draft is written over the saved one before React re-renders. */
+  const canSave = useRef(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORE_KEYS.draft);
-      if (raw) {
-        const saved = JSON.parse(raw) as { draft: VacancyV2; entered: boolean; step: number };
-        if (saved?.draft) {
-          setDraft(saved.draft);
-          setEntered(saved.entered ?? false);
-          setStep(saved.step ?? 1);
-        }
-      }
-    } catch {
-      /* corrupted draft — start clean */
+    const saved = readStudioSession();
+    if (saved) {
+      setDraft(saved.draft);
+      setEntered(saved.entered ?? false);
+      setStep(saved.step ?? 1);
+      setPreviewedAt(saved.previewedAt ?? null);
+      setSavedAt(saved.savedAt ?? null);
     }
-    hydrated.current = true;
+    setHydrated(true);
   }, []);
 
+  /* Persist on every change, but never before hydration has produced its
+     re-render — the first pass after hydration is the restored state itself,
+     so writing it back is a no-op rather than a clobber. */
   useEffect(() => {
-    if (!hydrated.current) return;
+    if (!hydrated) return;
+    if (!canSave.current) {
+      canSave.current = true;
+      return; // this commit is the restored (or untouched empty) state
+    }
+    const at = new Date().toISOString();
+    const session: StudioSession = { draft, entered, step, previewedAt: previewedAt ?? undefined, savedAt: at };
     try {
-      localStorage.setItem(STORE_KEYS.draft, JSON.stringify({ draft, entered, step }));
+      window.localStorage.setItem(STORE_KEYS.draft, JSON.stringify(session));
+      setSavedAt(at);
     } catch {
       /* storage full/unavailable — draft lives in memory only */
     }
-  }, [draft, entered, step]);
+  }, [draft, entered, step, previewedAt, hydrated]);
 
   const update = useCallback((mutate: (d: VacancyV2) => VacancyV2) => {
     setDraft((d) => mutate(d));
@@ -133,17 +126,25 @@ export default function StudioProvider({ children }: { children: React.ReactNode
 
   const replace = useCallback((d: VacancyV2) => setDraft(d), []);
 
+  const markPreviewed = useCallback(() => setPreviewedAt(new Date().toISOString()), []);
+
   const resetBlank = useCallback(() => {
     setDraft(createEmptyDraft());
     setStep(1);
     setEntered(false);
-    try {
-      localStorage.removeItem(STORE_KEYS.draft);
-    } catch {}
+    setPreviewedAt(null);
+    setSavedAt(null);
+    clearStudioSession();
   }, []);
 
   return (
-    <Ctx.Provider value={{ draft, update, replace, resetBlank, step, setStep, entered, setEntered }}>
+    <Ctx.Provider
+      value={{
+        draft, update, replace, resetBlank,
+        step, setStep, entered, setEntered,
+        previewedAt, markPreviewed, savedAt, hydrated,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

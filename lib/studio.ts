@@ -166,41 +166,97 @@ export function coverageMatrix(draft: VacancyV2): CoverageCell[] {
 
 /* ---------- effective weights (SPEC §4.5 — catches silent double-counting) ---------- */
 
-export interface EffectiveWeights {
-  attributes: { attributeId: string; name: string; pct: number }[];
-  blocks: { blockId: string; title: string; pct: number }[];
+export interface EffectiveAttributeWeight {
+  attributeId: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  focus: boolean;
+  /* What the criteria weights alone say: (category/100) × attribute. */
+  configuredPct: number;
+  /* What actually reaches the composite. An attribute no scored block measures
+     contributes nothing, and the remaining attributes renormalize to 100 —
+     this is the number that exposes silent double-counting and dead weight. */
+  effectivePct: number;
+  covered: boolean;
+  measuredByBlockIds: string[];
 }
 
-/* True % of the final composite: category weight × attribute weight within
-   category, distributed over the scored blocks measuring that attribute in
-   proportion to their measure shares. */
+export interface EffectiveWeights {
+  attributes: EffectiveAttributeWeight[];
+  categories: { categoryId: string; name: string; configuredPct: number; effectivePct: number }[];
+  blocks: { blockId: string; title: string; pct: number }[];
+  /* Configured weight that measures nothing and is therefore discarded. */
+  uncoveredPct: number;
+}
+
 export function effectiveWeights(draft: VacancyV2): EffectiveWeights {
   const scoredBlocks = draft.pipeline.filter((b) => b.scored);
+
+  /* pass 1 — configured weight and coverage per attribute */
+  const rows = draft.categories.flatMap((cat) =>
+    cat.attributes.map((attr) => {
+      const measuring = scoredBlocks.filter((b) =>
+        b.measures.some((m) => m.attributeId === attr.id && m.share > 0),
+      );
+      return {
+        attr,
+        cat,
+        configured: (cat.weight / 100) * attr.weight,
+        measuring,
+      };
+    }),
+  );
+
+  const coveredTotal = rows.reduce((a, r) => a + (r.measuring.length > 0 ? r.configured : 0), 0);
+
+  /* pass 2 — renormalize the covered weight to 100 and push it onto blocks */
   const blockPct = new Map<string, number>(scoredBlocks.map((b) => [b.id, 0]));
-  const attributes: EffectiveWeights["attributes"] = [];
+  const attributes: EffectiveAttributeWeight[] = rows.map((r) => {
+    const effective = r.measuring.length > 0 && coveredTotal > 0 ? (r.configured / coveredTotal) * 100 : 0;
 
-  for (const cat of draft.categories) {
-    for (const attr of cat.attributes) {
-      const pct = (cat.weight / 100) * attr.weight; // (cat/100) × (attr/100) × 100
-      attributes.push({ attributeId: attr.id, name: attr.name, pct: round1(pct) });
-
-      const measuring = scoredBlocks
-        .map((b) => ({ b, share: b.measures.find((m) => m.attributeId === attr.id)?.share ?? 0 }))
-        .filter((x) => x.share > 0);
-      const shareTotal = measuring.reduce((a, x) => a + x.share, 0);
-      for (const { b, share } of measuring) {
-        blockPct.set(b.id, (blockPct.get(b.id) ?? 0) + pct * (share / shareTotal));
-      }
+    const shareTotal = r.measuring.reduce(
+      (a, b) => a + (b.measures.find((m) => m.attributeId === r.attr.id)?.share ?? 0),
+      0,
+    );
+    for (const b of r.measuring) {
+      const share = b.measures.find((m) => m.attributeId === r.attr.id)?.share ?? 0;
+      const portion = shareTotal > 0 ? share / shareTotal : 1 / r.measuring.length;
+      blockPct.set(b.id, (blockPct.get(b.id) ?? 0) + effective * portion);
     }
-  }
+
+    return {
+      attributeId: r.attr.id,
+      name: r.attr.name,
+      categoryId: r.cat.id,
+      categoryName: r.cat.name,
+      focus: !!r.attr.focus,
+      configuredPct: round1(r.configured),
+      effectivePct: round1(effective),
+      covered: r.measuring.length > 0,
+      measuredByBlockIds: r.measuring.map((b) => b.id),
+    };
+  });
+
+  const categories = draft.categories.map((cat) => {
+    const own = attributes.filter((a) => a.categoryId === cat.id);
+    return {
+      categoryId: cat.id,
+      name: cat.name,
+      configuredPct: round1(own.reduce((a, x) => a + x.configuredPct, 0)),
+      effectivePct: round1(own.reduce((a, x) => a + x.effectivePct, 0)),
+    };
+  });
 
   return {
     attributes,
+    categories,
     blocks: scoredBlocks.map((b) => ({
       blockId: b.id,
       title: b.title,
       pct: round1(blockPct.get(b.id) ?? 0),
     })),
+    uncoveredPct: round1(rows.reduce((a, r) => a + (r.measuring.length === 0 ? r.configured : 0), 0)),
   };
 }
 

@@ -560,6 +560,12 @@ export function createBlock(kind: BlockKind, order: number): PipelineBlock {
 /* ---------- time estimation (feeds the composer's time rail, §4.4) ---------- */
 
 export function estimateMinutes(block: PipelineBlock): number {
+  return block.timeOverrideMin ?? derivedMinutes(block);
+}
+
+/* The value the block's own settings imply, ignoring any author override.
+   Shown as the "derived" reference next to the editable time field. */
+export function derivedMinutes(block: PipelineBlock): number {
   const s = block.settings;
   let minutes = BLOCK_LIBRARY[block.kind].defaultMinutes;
 
@@ -630,4 +636,58 @@ export function estimateMinutes(block: PipelineBlock): number {
   }
 
   return Math.max(1, Math.round(minutes));
+}
+
+/* ---------- editing candidate time (Pipeline Composer) ---------- */
+
+/* Some kinds own their duration as a real, candidate-facing setting: a live
+   interview has a cap, a coding task has a timer, a case has a time box. For
+   those, editing the time edits that setting, so the number the author sees,
+   the number the candidate is told, and the number the runtime enforces can
+   never drift apart. Everything else derives its time from content (questions,
+   items, fields) and takes a plain override instead. */
+export function timeSettingOf(
+  block: PipelineBlock,
+): { label: string; unit: "min" | "hours" } | null {
+  switch (block.settings.kind) {
+    case "live_ai_interview": return { label: "Conversation cap", unit: "min" };
+    case "cognitive": return { label: "Total test time", unit: "min" };
+    case "coding": return { label: "Time cap", unit: "min" };
+    case "case_exercise": return { label: "Time box", unit: "min" };
+    case "work_sample": return { label: "Time budget", unit: "hours" };
+    case "job_knowledge": return block.settings.timing === "total" ? { label: "Total test time", unit: "min" } : null;
+    default: return null;
+  }
+}
+
+/* Returns a NEW block; never mutates. Writes through to the owning setting when
+   there is one, otherwise records an explicit override. */
+export function setBlockMinutes(block: PipelineBlock, minutes: number): PipelineBlock {
+  const m = Math.max(1, Math.round(minutes));
+  const s = block.settings;
+  let settings: BlockSettings = s;
+  let timeOverrideMin: number | undefined = block.timeOverrideMin;
+
+  switch (s.kind) {
+    case "live_ai_interview": settings = { ...s, durationCapMin: m }; timeOverrideMin = undefined; break;
+    case "cognitive": settings = { ...s, totalTimeMin: m }; timeOverrideMin = undefined; break;
+    case "coding": settings = { ...s, timeCapMin: m }; timeOverrideMin = undefined; break;
+    case "case_exercise": settings = { ...s, timeBoxMin: m }; timeOverrideMin = undefined; break;
+    case "work_sample": settings = { ...s, timeBudgetHours: Math.max(0.25, Math.round((m / 60) * 4) / 4) }; timeOverrideMin = undefined; break;
+    case "job_knowledge":
+      if (s.timing === "total") { settings = { ...s, totalTimeMin: m }; timeOverrideMin = undefined; }
+      else timeOverrideMin = m;
+      break;
+    default:
+      timeOverrideMin = m;
+  }
+
+  const next: PipelineBlock = { ...block, settings, timeOverrideMin };
+  return { ...next, estimatedMinutes: estimateMinutes(next) };
+}
+
+/* Drop the override and fall back to what the block's content implies. */
+export function clearBlockTimeOverride(block: PipelineBlock): PipelineBlock {
+  const next: PipelineBlock = { ...block, timeOverrideMin: undefined };
+  return { ...next, estimatedMinutes: derivedMinutes(next) };
 }

@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { ArrowRight, Briefcase, Users, ClipboardCheck, Scale } from "lucide-react";
-import { useState } from "react";
-import { vacancies, attentionQueue } from "@/lib/fixtures";
+import { useEffect, useState } from "react";
+import { vacancies as demoVacancies, attentionQueue } from "@/lib/fixtures";
+import { listApplications, listVacancies } from "@/lib/store";
+import type { Vacancy } from "@/lib/types";
 import { StatusPill } from "@/components/ui/primitives";
 
 const queueTone = { review: "var(--warn)", flag: "var(--neg)", divergence: "var(--iris-b)", bias: "var(--neg)" } as const;
@@ -12,6 +14,25 @@ export default function Dashboard() {
   const [importOpen, setImportOpen] = useState(false);
   const [imported, setImported] = useState(false);
   const [importReference, setImportReference] = useState("");
+  /* Roles you published in the Studio sit alongside the seeded demo portfolio,
+     and the KPI strip counts both. Read after mount to match the server render. */
+  const [own, setOwn] = useState<Vacancy[]>([]);
+  useEffect(() => {
+    setOwn(listVacancies().map((v) => {
+      const apps = listApplications(v.id);
+      return {
+        id: v.id,
+        title: v.profile.title || "Untitled position",
+        status: v.status,
+        code: v.code,
+        configVersion: v.configVersion,
+        candidates: apps.length,
+        needReview: apps.filter((a) => a.stage === "under_review" || a.stage === "needs_adjudication").length,
+        funnel: [],
+      };
+    }));
+  }, []);
+  const vacancies = [...own, ...demoVacancies.filter((v) => !own.some((o) => o.id === v.id))];
   const liveCount = vacancies.filter((vacancy) => vacancy.status === "LIVE").length;
   const candidateCount = vacancies.reduce((sum, vacancy) => sum + vacancy.candidates, 0);
   const reviewCount = vacancies.reduce((sum, vacancy) => sum + vacancy.needReview, 0);

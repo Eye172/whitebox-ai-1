@@ -7,6 +7,14 @@
 
 /* ———————————————————————— core scalars ———————————————————————— */
 
+/* Open enum: the listed values are the researched defaults the product ships
+   with, but any vocabulary field may carry an author-defined value. `Open<T>`
+   keeps editor autocompletion for the defaults while accepting custom strings,
+   so the studio can adapt to industries and taxonomies we never anticipated.
+   Closed unions are reserved for values that gate real behavior (block kinds,
+   severities, lifecycle states). */
+export type Open<T extends string> = T | (string & {});
+
 export type ConfidenceBand = "High" | "Medium" | "Low";
 export type Tier = "Top" | "Mid" | "Bottom";
 export type VerificationStatus = "VERIFIED" | "PENDING" | "—";
@@ -85,7 +93,15 @@ export interface Vacancy {
 
 /* ———————————————————————— criteria architecture (SPEC §4.3) ———————————————————————— */
 
-export type AttributeKind = "skill" | "trait" | "knowledge" | "qualification" | "experience" | "language";
+export type AttributeKind = Open<
+  "skill" | "trait" | "knowledge" | "qualification" | "experience" | "language"
+>;
+
+/* The six built-ins, for populating pickers. Custom kinds fall back to the
+   "skill" treatment for BARS drafting and default to interview verification. */
+export const ATTRIBUTE_KINDS = [
+  "skill", "trait", "knowledge", "qualification", "experience", "language",
+] as const;
 
 /* 5 levels, each with a concrete BARS behavioral anchor (R-I.2) */
 export interface ProficiencyScale {
@@ -120,6 +136,10 @@ export interface AttributeSpec {
 export interface CategorySpec {
   id: string;
   name: string;
+  /* Author's own description of what this category covers. Injected into
+     evaluation prompts and shown on the candidate-facing criteria list —
+     distinct from `rationale`, which is the generator's "why this weight". */
+  description?: string;
   weight: number; // sums to 100 across categories
   attributes: AttributeSpec[];
   rationale?: string;
@@ -449,7 +469,11 @@ export interface PipelineBlock {
   candidateIntro: string; // states what's measured + why job-relevant (justice rule, R-I.7)
   required: boolean; // optional blocks never gate
   scored: boolean; // informational blocks excluded from composite
-  estimatedMinutes: number;
+  estimatedMinutes: number; // last computed value, cached for read-only surfaces
+  /* Author override for candidate time. Kinds whose duration is a real setting
+     (live interview cap, coding cap, case time box…) write that setting instead
+     and leave this undefined — see setBlockMinutes() in lib/blocks.ts. */
+  timeOverrideMin?: number;
   gate?: { minBlockScore?: number; mustHaveIds?: string[] }; // hurdle before next block
   measures: { attributeId: string; share: number }[]; // shares sum 100 per block
   settings: BlockSettings;
@@ -475,12 +499,26 @@ export interface ScoringPolicy {
 
 /* ———————————————————————— position profile (SPEC §4.2) ———————————————————————— */
 
-export type Seniority = "Intern" | "Junior" | "Middle" | "Senior" | "Lead" | "Head" | "Executive";
-export type EmploymentType = "full_time" | "part_time" | "contract" | "internship" | "seasonal" | "shift";
-export type WorkMode = "on_site" | "hybrid" | "remote_country" | "remote_global";
-export type IndustryPack =
+export type Seniority = Open<"Intern" | "Junior" | "Middle" | "Senior" | "Lead" | "Head" | "Executive">;
+export type EmploymentType = Open<"full_time" | "part_time" | "contract" | "internship" | "seasonal" | "shift">;
+export type WorkMode = Open<"on_site" | "hybrid" | "remote_country" | "remote_global">;
+export type IndustryPack = Open<
   | "tech" | "sales_cs" | "healthcare" | "finance" | "retail_hourly"
-  | "manufacturing" | "logistics" | "creative" | "public_sector" | "education" | "custom";
+  | "manufacturing" | "logistics" | "creative" | "public_sector" | "education" | "custom"
+>;
+
+/* Built-in vocabularies for the pickers — every one of these accepts a custom
+   value on top (Combo in the studio), so the product adapts to any market. */
+export const SENIORITIES = ["Intern", "Junior", "Middle", "Senior", "Lead", "Head", "Executive"] as const;
+export const EMPLOYMENT_TYPES = ["full_time", "part_time", "contract", "internship", "seasonal", "shift"] as const;
+export const WORK_MODES = ["on_site", "hybrid", "remote_country", "remote_global"] as const;
+export const INDUSTRY_PACKS = [
+  "tech", "sales_cs", "healthcare", "finance", "retail_hourly",
+  "manufacturing", "logistics", "creative", "public_sector", "education", "custom",
+] as const;
+/* Seniority levels that carry behavior (question type moderation, R-I.2). */
+export const JUNIOR_SENIORITIES: readonly string[] = ["Intern", "Junior"];
+export const SENIOR_PLUS_SENIORITIES: readonly string[] = ["Senior", "Lead", "Head", "Executive"];
 
 export interface PositionProfile {
   title: string;
@@ -525,8 +563,11 @@ export interface CandidateExperienceConfig {
     feedbackOffer: boolean; // on-request structured explanation (R-IV.5)
     senderIdentity: "org" | "recruiter";
   };
-  tone: "formal" | "neutral" | "warm";
+  tone: Open<"formal" | "neutral" | "warm">;
 }
+
+export const JURISDICTION_PROFILES = ["EU", "US-NYC", "US-IL", "US-CA", "UK", "KZ", "Custom"] as const;
+export const CANDIDATE_TONES = ["formal", "neutral", "warm"] as const;
 
 /* ———————————————————————— governance (SPEC §4.7) ———————————————————————— */
 

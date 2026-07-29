@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowDownToLine, BarChart3, Check, ChevronRight, CircleGauge,
   Copy, FileCheck2, Filter, GitCompareArrows, Mail, Play, Search, Send,
@@ -10,7 +10,25 @@ import {
 import { candidates, threshold, vacancies, vacancyV2Demo } from "@/lib/fixtures";
 import { BLOCK_LIBRARY } from "@/lib/blocks";
 import { effectiveWeights } from "@/lib/studio";
+import { listApplications, listVacancies } from "@/lib/store";
+import type { Vacancy, VacancyV2 } from "@/lib/types";
 import { ConfidenceBadge, ScoreCell, StatusPill, TierBadge } from "@/components/ui/primitives";
+
+/* A stored VacancyV2 rendered as a portfolio row. Candidate counts come from
+   real applications, not a decorative number. */
+function toListRow(v: VacancyV2): Vacancy {
+  const apps = listApplications(v.id);
+  return {
+    id: v.id,
+    title: v.profile.title || "Untitled position",
+    status: v.status,
+    code: v.code,
+    configVersion: v.configVersion,
+    candidates: apps.length,
+    needReview: apps.filter((a) => a.stage === "under_review" || a.stage === "needs_adjudication").length,
+    funnel: [],
+  };
+}
 
 const CARD = "rounded-xl border border-hairline bg-surface";
 const BTN = "rounded-lg border border-hairline bg-surface2 px-3 py-2 text-[12px] text-mid hover:border-hairline-strong hover:text-hi";
@@ -32,7 +50,13 @@ function Bars({ values, color = "var(--iris-b)" }: { values: number[]; color?: s
 function VacanciesSurface() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("ALL");
-  const shown = vacancies.filter((v) => (status === "ALL" || v.status === status) && v.title.toLowerCase().includes(q.toLowerCase()));
+  /* Vacancies you published in the Studio are real records in the store; the
+     seeded demo roles are the rest of the portfolio. Read after mount so the
+     server-rendered markup matches. */
+  const [own, setOwn] = useState<Vacancy[]>([]);
+  useEffect(() => setOwn(listVacancies().map(toListRow)), []);
+  const all = [...own, ...vacancies.filter((v) => !own.some((o) => o.id === v.id))];
+  const shown = all.filter((v) => (status === "ALL" || v.status === status) && v.title.toLowerCase().includes(q.toLowerCase()));
   return <div className="p-8">
     <Header eyebrow="Portfolio" title="Vacancies" text="Find a role, review its candidates, or create a new vacancy." action={<Link href="/vacancies/new" className="rounded-lg bg-paper px-4 py-2.5 text-[12px] font-medium text-void">Create vacancy</Link>} />
     <div className="mb-4 flex gap-2">
@@ -114,7 +138,7 @@ function ConfigSurface() {
     <div className="mb-4 flex gap-2">{["Criteria","Pipeline","Scoring","Governance","Notices"].map(t=><button key={t} onClick={()=>setTab(t)} className={`${BTN} ${tab===t?"border-irisb/50 text-hi":""}`}>{t}</button>)}</div>
     {tab==="Criteria"&&<div className="grid grid-cols-2 gap-4">{vacancyV2Demo.categories.map(c=><div key={c.id} className={`${CARD} p-5`}><div className="flex justify-between"><span className="text-[13px] text-hi">{c.name}</span><span className="font-mono text-[11px]">{c.weight}%</span></div>{c.attributes.map(a=><div key={a.id} className="mt-3 text-[11px] text-mid">{a.focus?"◉ ":""}{a.name} · {a.kind} · {a.weight}%</div>)}</div>)}</div>}
     {tab==="Pipeline"&&<div className="space-y-3">{vacancyV2Demo.pipeline.map((b,i)=><div key={b.id} className={`${CARD} flex items-center gap-4 p-4`}><span className="font-mono text-[10px] text-lo">{String(i+1).padStart(2,"0")}</span><div className="flex-1"><div className="text-[13px] text-hi">{b.title}</div><div className="mt-1 text-[10px] text-mid">{BLOCK_LIBRARY[b.kind].methodName} · {b.estimatedMinutes} min</div></div><span className="rounded-full border border-hairline px-2 py-1 font-mono text-[9px] text-lo">TIER {b.integrityTier}</span></div>)}</div>}
-    {tab==="Scoring"&&<div className={`${CARD} p-5`}><div className="hud-label">Effective composite</div>{ew.attributes.map(a=><div key={a.attributeId} className="mt-4"><div className="flex justify-between text-[11px]"><span>{a.name}</span><span className="font-mono">{a.pct}%</span></div><div className="mt-1 h-1 rounded bg-void2"><div className="h-full rounded bg-irisb" style={{width:`${a.pct*3}%`}} /></div></div>)}</div>}
+    {tab==="Scoring"&&<div className={`${CARD} p-5`}><div className="hud-label">Effective composite</div>{ew.attributes.map(a=><div key={a.attributeId} className="mt-4"><div className="flex justify-between text-[11px]"><span>{a.name}</span><span className="font-mono">{a.effectivePct}%</span></div><div className="mt-1 h-1 rounded bg-void2"><div className="h-full rounded bg-irisb" style={{width:`${Math.min(100,a.effectivePct*3)}%`}} /></div></div>)}</div>}
     {tab==="Governance"&&<div className={`${CARD} p-5`}>{vacancyV2Demo.governance.roles.map(r=><div key={r.userId} className="flex justify-between border-b border-hairline py-3 text-[12px] last:border-0"><span>{r.name}</span><span className="font-mono text-lo">{r.role} · PII {r.piiReveal?"YES":"NO"}</span></div>)}</div>}
     {tab==="Notices"&&<div className={`${CARD} p-5`}><div className="hud-label">{vacancyV2Demo.experience.notices.jurisdictionProfile} · notice v{vacancyV2Demo.experience.notices.version}</div><p className="mt-4 max-w-3xl text-[12px] leading-relaxed text-mid">{vacancyV2Demo.experience.notices.aiDisclosure}</p></div>}
   </div>;

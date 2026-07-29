@@ -188,15 +188,16 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
 
 function barsFor(kind: AttributeKind, topic: string): [string, string, string, string, string] {
   const t = topic.toLowerCase();
+  /* The skill treatment doubles as the fallback: AttributeKind is an open union,
+     so an author-defined kind is a legal value that reaches here. */
+  const asSkill: [string, string, string, string, string] = [
+    `Talks about ${t} in general terms only; no personally executed example.`,
+    `Describes taking part in ${t} work, but actions were directed by others and outcomes go unstated.`,
+    `Gives one concrete, self-driven episode of ${t} with a clear action and a plausible outcome.`,
+    `Names the situation, their own decisions, and a measured outcome; explains why the approach fit the constraints.`,
+    `Multiple quantified episodes across contexts; anticipates failure modes and teaches the approach to others.`,
+  ];
   switch (kind) {
-    case "skill":
-      return [
-        `Talks about ${t} in general terms only; no personally executed example.`,
-        `Describes taking part in ${t} work, but actions were directed by others and outcomes go unstated.`,
-        `Gives one concrete, self-driven episode of ${t} with a clear action and a plausible outcome.`,
-        `Names the situation, their own decisions, and a measured outcome; explains why the approach fit the constraints.`,
-        `Multiple quantified episodes across contexts; anticipates failure modes and teaches the approach to others.`,
-      ];
     case "trait":
       return [
         `No behavioral evidence of ${t}; answers stay hypothetical.`,
@@ -237,6 +238,9 @@ function barsFor(kind: AttributeKind, topic: string): [string, string, string, s
         `Communicates fluently on complex topics with minor slips (≈C1).`,
         `Near-native precision and register control (≈C2).`,
       ];
+    case "skill":
+    default:
+      return asSkill;
   }
 }
 
