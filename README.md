@@ -1,112 +1,218 @@
-# WhiteBox AI — Explainable AI Hiring Operating System
+# WhiteBox AI
 
-> *"Vertical AI, built for fair hiring. Not a faster black box — a white one you can see into."*
+WhiteBox AI is an explainable, human-in-the-loop hiring application for
+job-related, multi-stage assessment. A vacancy freezes its job analysis,
+criteria, evidence methods, assessment stages, BARS rubrics, weights and
+governance into one version. Candidate submissions and reviewer scores stay
+bound to that exact version, every score must cite source evidence, and a named
+human remains responsible for the employment decision.
 
-WhiteBox AI is a **two-sided hiring platform for the first screening stage** that replaces the opaque
-algorithmic *black box* with an explainable, controllable, professionally-configurable evaluation
-system — and keeps the human as the final decision-maker.
+## Current release
 
-## The problem
+The repository contains a working Next.js application with PostgreSQL-backed
+vacancy versions, candidate sessions, consent, a frozen assessment runtime for
+all supported block kinds, private file/video storage, AI transcription and
+evidence review, deterministic answer-key handling, tenant-scoped human review,
+and a hash-chained audit trail.
 
-Companies receive hundreds to thousands of applications per role and rely on AI/ATS screening that
-decides who reaches a human — as a black box:
+Recorded video is one possible published stage:
 
-- Candidates never learn **why** they were rejected.
-- Recruiters cannot see **which factors** drove a score.
-- Different LLMs rank identical résumés differently, and hidden bias gets **replicated, not corrected**.
-- Most tools over-index on résumé keywords while leadership, critical thinking, communication and
-  growth potential are barely assessed.
-- Regulators now treat hiring AI as high-risk (EU AI Act; NYC Local Law 144 bias audits), but
-  companies have no auditable way to prove fair screening.
+1. The candidate opens an invitation code and accepts the disclosed notice.
+2. The system check requests camera and microphone access.
+3. The browser uses `getUserMedia` and `MediaRecorder` to capture one answer at a
+   time. The candidate can stop, review, and re-record locally before choosing
+   **Use recording**, which begins the secure upload.
+4. Each multipart upload is limited to 24 MiB in total. The server accepts only
+   `video/webm` or `video/mp4` and validates the declared type and container
+   signature. Outside development demo mode, FFprobe must also find decodable
+   video and audio tracks within the allowed duration before private storage.
+5. `OPENAI_TRANSCRIBE_MODEL` (default: `gpt-4o-transcribe`) creates a transcript.
+   The server stores that provider transcript immutably and signs its SHA-256 into
+   the recording receipt. A candidate correction is stored separately with its
+   own hash, reason, and compact diff metadata. Unchanged provider text is eligible
+   for scoring; corrected or manually entered text must first be verified against
+   the clip by an authorized human reviewer.
+6. Production uses FFprobe only to verify that the upload has decodable audio
+   and video tracks and fits the published duration. The application does not
+   extract candidate frames or infer reading, gaze, emotion, appearance, accent,
+   identity, or personality from camera/microphone data.
 
-## The one differentiator
+A text-only accessibility accommodation is available before and during the
+interview. The selected mode is persisted in application state and mode changes
+are audited. It uses the same questions and rubrics, is not penalized, disables
+recording, and is enforced by the server. Video mode requires a valid recording
+receipt for every submitted answer.
 
-Competitors (HireVue, Mercor, BrightHire, Ashby scorecards) already solved per-competency scoring,
-rubric-driven interviews and blind feedback. **None does the one thing WhiteBox exists for** — every
-score ships with:
+### Privacy boundary
 
-1. **Ranked drivers** — the top factors that pushed a score up or down, modeled on the
-   FICO/VantageScore *reason-code* approach — the only legally tested model of explainable
-   adverse action.
-2. **Confidence as a phrase**, not a bare number.
-3. **Evidence chips** tying each score to actual interview fragments.
-4. A **collapsible reasoning trace** — the full path from answer to score.
-5. A **mandatory human exit** (accept / change / recompute / reject with reason) written to an
-   **append-only, hash-chained audit log**.
+- Production recordings go to a private S3-compatible bucket through server-side
+  SigV4 requests. No bucket URL or presigned object URL is returned to the browser.
+- HR playback is served through an authenticated, tenant-scoped, same-origin API
+  proxy with private/no-store headers.
+- Development demo mode can store files under `.data/recordings`. This local
+  filesystem backend is deliberately unavailable in production and is ignored by
+  Git.
+- Appearance, voice characteristics, gaze, emotion, background, and alleged
+  reading behavior are not collected as evaluation signals. The scoring provider receives only a
+  server-selected provider-verified or human-verified transcript and the
+  published rubric.
+- Production media probing uses a private temporary directory. The temporary
+  clip is deleted after FFprobe validation.
+- Recording and provider retention must match the notice shown to the candidate.
+  See the deletion workflow and operational requirements in
+  [DEPLOYMENT.md](DEPLOYMENT.md#retention-and-deletion).
 
-The AI never makes the final decision. It *structures information*; the human decides.
-When any design decision is ambiguous, the tie-breaker is:
-*does this make the reasoning more visible and more contestable?*
+## Run the development demo
 
-## What's built (working prototype, P0 + P1)
+Requirements: Node.js 24 and npm. FFprobe is also required when exercising the
+production media-validation path; the development demo does not require it.
 
-Built from **[WhiteBoxAIMASTERDOC.md](WhiteBoxAIMASTERDOC.md)** — the single source of truth
-(Books I–V: product vision, visual system, HR spec, candidate spec, build sequence).
+Create `.env.local` with only development-safe settings:
 
-| Surface | Route | Spec |
-| --- | --- | --- |
-| HR app shell — 264px sidebar (3 zones), 52px top bar, ⌘K palette | all HR routes | Book III · §0 |
-| Global Dashboard — KPI strip, vacancy cards, HITL attention queue, cube anchor | `/dashboard` | Book III · §1 |
-| Candidate Ranking — 10-column table, expandable rows, bulk bar, tiers | `/vacancies/vac-001/ranking` | Book III · §5 |
-| Candidate Scorecard — 6 tabs; **ranked drivers, confidence-as-phrase, evidence chips, collapsible trace**; HITL inspector with equal-weight Accept/Change/Recompute/Reject + reason → append-only hash-chained activity log | `/vacancies/vac-001/candidates/CND-4A19` | Book III · §6, Book I · Part VIII |
-| Create Vacancy wizard — NL→config with per-field "why" chips, weight sum=100 validation, publish → competition code | `/vacancies/new` | Book III · §2 |
-| Candidate Code Entry — calm register, cube-lit, disabled-until-valid | `/` | Book IV · §1 |
-| System Check gate — device checks + consent, Start disabled until all pass | `/interview/check` | Book IV · §4 |
-| AI Interview — cube-as-presence, adaptive follow-ups, gentle progress | `/interview/live` | Book IV · §5 |
-| Candidate Status — progress rail, dignified copy, inverted white-box trust panel | `/status` | Book IV · §7 |
-
-**Demo codes:** `WBX-3N8D` — new competition (interview flow); `WBX-7Q4K` — already-submitted
-application (status). Codes published from the wizard also work.
-
-## Run
-
-```bash
-npm install
-npm run dev        # http://localhost:3000
+```dotenv
+NODE_ENV=development
+NEXT_PUBLIC_APP_URL=http://localhost:3100
+WBX_DEMO_MODE=true
 ```
 
-Screenshots of every surface are in [`screenshots/`](screenshots).
-`node e2e-test.mjs` drives both flows end-to-end and regenerates them.
+Then run:
 
-## Design system
+```sh
+npm ci
+npm run dev -- --port 3100
+```
 
-- **Brand object:** a white, transparent, glowing cube — light passes through = explainability in
-  one image. Dark base (`--void #060608`), white-on-top dominant, **invertible white-box panels**
-  ("a white box you can see into") for explainability and trust moments.
-- **Tokens are law:** [`styles/tokens.css`](styles/tokens.css) — every token from Book I · Part III.
-  Iridescent/prism primary accent, swap-ready to `--dune-gold` / `--ember` via one variable.
-- **Elevation = 1px hairlines**, not shadows. Mono HUD labels, tabular numerals, corner-bracket
-  hover marks, iris focus rings.
-- **Two registers:** HR = dense, keyboard-first instrument (graph-paper, contour maps);
-  candidate = calm, spacious, single-action, reassuring.
+Open `http://localhost:3100`.
 
-## Architecture & stack
+- Candidate code: `WBX-3N8D`
+- Already-submitted candidate code: `WBX-7Q4K`
+- HR login: `admin@whitebox.local`
+- HR password: `WhiteBox!2026`
 
-**Now (prototype):** Next.js 15 (App Router) + TypeScript + Tailwind, hand-rolled components on the
-token system, typed AI stubs in [`lib/ai.ts`](lib/ai.ts) implementing the exact contracts from
-Book V · §V.3 — swapping stubs for real LLM calls changes nothing outside those files.
+The legacy demo records real browser media to the private local demo directory,
+but its deterministic compatibility provider does not send it to OpenAI:
+transcription is left for manual entry. Manual demo transcripts deliberately fail
+closed until an HR reviewer opens **Review transcripts**, compares each clip, and
+records a human verification. Use synthetic people and answers only.
 
-**Locked target stack (Book V):** FastAPI (Python) AI core + Next.js BFF · PostgreSQL + pgvector ·
-Redis · Temporal durable workflows (interview → transcription → scoring → explainability) ·
-Claude / GPT-4-class LLMs with task-based routing, open models via vLLM where data residency
-requires · LangGraph orchestration · Instructor structured output · Langfuse observability ·
-Fairlearn/Aequitas bias testing · WorkOS auth/SSO · S3-compatible storage with lifecycle
-auto-delete.
+### Real-AI rollout boundary
 
-## Roadmap
+AI authoring endpoints are real-provider-only: they never return deterministic
+vacancy, criteria, or question text when OpenAI is unavailable. In local
+development, when `OPENAI_API_KEY` is not already set, the server may read a key
+from an ignored root `API.md` line named `open_ai_api`. `API.md` is excluded from
+both Git and the Docker build context; production never reads it and must receive
+`OPENAI_API_KEY` from a managed server-side secret.
 
-- **P0 — Foundation** ✅ tokens, app shell, states, white-box primitive
-- **P1 — Core differentiator** ✅ ranking, scorecard (drivers/confidence/evidence/trace), HITL + audit log
-- **P2** — vacancy wizard polish, competency builder, onboarding, full interview flow
-- **P3** — real AI pipeline (FastAPI + LangGraph), transcription, scoring, bias monitoring
-- **P4** — r3f glowing-cube hero, motion system, hardening
+At first publication the server, not the browser, stamps a new vacancy ID with
+the immutable `openai_required` policy. Its interview questions, adaptive turn
+generation, transcription, and rubric evaluation fail closed if the real
+provider is unavailable; no deterministic output is substituted. Vacancy configs
+created before this rollout have no marker and deliberately retain their previous
+deterministic behavior, even when a real key is configured. Later versions keep
+the policy assigned to the original vacancy ID, so a client publish payload
+cannot upgrade or downgrade historical results.
+
+## Validate
+
+```sh
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
+
+With the application running on port 3100:
+
+```sh
+npm run test:e2e
+```
+
+The browser journey uses synthetic camera and microphone devices. It does not
+access a developer's real camera. Screenshots go to the operating-system
+temporary directory by default; set `WBX_E2E_OUTPUT` or pass a path argument to
+keep them elsewhere.
+
+## Production configuration
+
+Production requires all of the following:
+
+- PostgreSQL and every migration in `db/migrations/`, through
+  `008_reference_checks.sql`;
+- `WBX_DEMO_MODE=false`, independent signing secrets, and a bootstrap HR owner;
+- `AI_PROVIDER=openai`, an OpenAI API key, an evaluation model, and a
+  transcription model;
+- FFprobe installed in the runtime image (or an explicit executable path in
+  `WBX_FFPROBE_PATH`) so the readiness probe and server-side A/V verification
+  can succeed;
+- a trusted ingress that strips and overwrites the configured
+  `WBX_TRUSTED_PROXY_HEADER`; PostgreSQL holds atomic shared rate-limit counters;
+- an HTTPS S3-compatible endpoint, private bucket, narrowly scoped credentials,
+  and server-side encryption;
+- a verified recording deletion workflow and storage lifecycle safety net;
+- legal/privacy approval for the candidate notice, retention period, assessment
+  methods, and provider processing.
+
+Use [DEPLOYMENT.md](DEPLOYMENT.md) as the production runbook and
+[SECURITY.md](SECURITY.md) for the media and hiring-AI security boundary.
+
+## Retention readiness
+
+`npm run retention:run` atomically removes expired candidate identity, consent
+telemetry, answer/transcript rows, reference responses, free-text decision
+reasons, and evaluation output, then replaces application state with a minimal
+tombstone. Audit records retain reason hashes rather than the free text. The
+worker moves applications with outstanding objects to `object_delete_pending`. A
+separate queue deletes private S3 or local objects with capped exponential
+backoff. An application becomes `complete` and receives
+`retention_completed_at` only after every associated recording row is `deleted`.
+Failed object deletions preserve their attempt, next-attempt, and safe error
+metadata and make the attempted run exit non-zero. `npm run retention:verify`
+performs a read-only check of these state-machine invariants.
+
+The Compose topology includes a dedicated non-root scheduler with a freshness
+health check. Production still requires alerting on every non-zero run and
+overdue `delete_pending` row, independent object/metadata reconciliation, a
+backup aging policy, and a staging erasure drill. Passing those operational
+checks is a go-live requirement; merely starting the worker is not evidence that
+a deployed retention policy works.
+
+Production startup is fail-closed: before importing the standalone HTTP server,
+the launcher verifies non-placeholder environment values, required PostgreSQL
+tables/columns and connectivity, FFprobe, and private-storage reachability.
+
+## Main routes
+
+| Surface | Route |
+| --- | --- |
+| Candidate code entry | `/` |
+| Candidate device check and consent | `/interview/check` |
+| Recorded interview | `/interview/live` |
+| Candidate status | `/status` |
+| Secure referee questionnaire | `/reference/:opaqueToken` |
+| HR login | `/login` |
+| HR dashboard | `/dashboard` |
+| Vacancies | `/vacancies` |
+| Candidate ranking | `/vacancies/:id/ranking` |
+| HR transcript provenance review | `/vacancies/:id/applications/:applicationId/transcripts` |
+| Candidate scorecard | `/vacancies/:id/candidates/:candidateId` |
+| Liveness probe | `/api/health/live` |
+| Production readiness probe | `/api/health/ready` |
 
 ## Repository map
 
-| File | Purpose |
+| Path | Purpose |
 | --- | --- |
-| [WhiteBoxAIMASTERDOC.md](WhiteBoxAIMASTERDOC.md) | Single source of truth — Books I–V |
-| [HRSpec.md](HRSpec.md) | HR-side screen spec (13 screens) |
-| [CandidateSpec.md](CandidateSpec.md) | Candidate-side screen spec (7 screens) |
-| [WhiteBoxAIResearch4.md](WhiteBoxAIResearch4.md) | Upstream research conspectus |
-| `app/` `components/` `lib/` `styles/` | The working prototype |
+| `app/` | Next.js pages and API routes |
+| `lib/server/ai-provider.ts` | Vacancy authoring, interview routing, transcription, and evidence-evaluation providers |
+| `lib/server/media.ts` | Upload validation, private storage, receipts, playback reads, and deletion primitives |
+| `lib/server/transcript-provenance.ts` | Transcript hashing, correction diffing, fail-closed selection, and human verification |
+| `lib/server/reference-checks.ts` | Expiring single-use referee invitations and immutable structured-response receipts |
+| `lib/server/video-analysis.ts` | FFprobe A/V track and duration verification |
+| `lib/server/repository.ts` | PostgreSQL and development-demo persistence |
+| `db/migrations/` | Relational schema, recording metadata, and the video-only media constraint |
+| `scripts/migrate.mjs` | Ordered transactional migrations and owner bootstrap |
+| `scripts/retention-worker.mjs` | Current relational-data retention worker |
+| `e2e-test.mjs` | Candidate and HR browser journey |
+| `styles/tokens.css` | Visual design tokens |
+| `WhiteBoxAIMASTERDOC.md` | Product and design reference |

@@ -2,7 +2,8 @@
    BUILT-IN PRESETS — SPEC §5 (role-family presets per industry pack)
    Three complete VacancyV2 payloads with populated criteria (BARS
    per SPEC §4.3.2) and pipelines (SPEC §4.4). Method rationale is
-   stated inline per built-in; validity figures from R-I.1.
+   stated inline per built-in; every method still requires job-expert review,
+   accessibility checks and validation for its actual role and population.
    instantiatePreset = deep copy + fresh ids (SPEC §5 "instantiate").
    Pure TS — no React, no side effects.
    ============================================================ */
@@ -43,7 +44,7 @@ const rubric = (id: string, attributeId: string, anchors: Five): Rubric => ({
   version: 1,
 });
 
-/* behavioral video question (async_interview, SPEC §4.4.4) */
+/* behavioral video question used by the launch-ready structured interview */
 const vidQ = (
   id: string,
   attributeId: string,
@@ -60,7 +61,7 @@ const vidQ = (
   answerCapSec: 180,
   modality: "video",
   reRecordAttempts: 1,
-  notesAllowed: true,
+  notesAllowed: false,
   probes,
   rubric: rubric(`${id}-rub`, attributeId, anchors),
   source: "bank",
@@ -215,8 +216,9 @@ const governanceCfg = (): GovernanceConfig => ({
    PRESET 1 — Retail Store Associate (hourly, retail_hourly pack)
    Method rationale: situational questions instead of behavioral for
    low-complexity, low-experience pools (Huffcutt moderator, R-I.2);
-   behavioral-tendency SJT keeps cognitive loading low (R-I.4); short
-   overt integrity module for cash/shrink exposure (ρ ≈ .31, d ≈ 0).
+   behavioral-tendency SJT keeps the scenarios close to the work; any
+   overt integrity module requires a named instrument, documented cash/shrink
+   relevance, accessibility review and local outcome/fairness monitoring.
    ============================================================ */
 
 const RT_CF_ANCHORS: Five = [
@@ -303,7 +305,11 @@ const RETAIL_CATEGORIES: CategorySpec[] = [
         "rt-att-hon", "Honesty & Rule Adherence", "trait", 50,
         "Follows cash, discount, and inventory procedures exactly and reports irregularities rather than absorbing them.",
         RT_HON_ANCHORS,
-        { verification: "test", rationale: "Verified by the overt integrity module — near-zero subgroup differences (R-I.4)." },
+        {
+          verification: "test",
+          rationale:
+            "If used, verify with a named job-related instrument and monitor local outcomes and subgroup impact; keep it supporting rather than dispositive.",
+        },
       ),
     ],
   },
@@ -519,7 +525,7 @@ const RETAIL_PIPELINE: PipelineBlock[] = [
       questions: RETAIL_CHAT_QUESTIONS,
       minAnswerWords: 30,
       maxAnswerWords: 150,
-      typingTelemetry: true,
+      typingTelemetry: false,
       pastePolicy: "warn",
       followUpPolicy: 1,
       tone: "warm",
@@ -540,7 +546,7 @@ const RETAIL_PIPELINE: PipelineBlock[] = [
     ],
     {
       kind: "sjt",
-      instruction: "behavioral_tendency", // loads personality, not GMA — low adverse impact (R-I.4)
+      instruction: "behavioral_tendency",
       format: "pick_best",
       keyType: "hybrid",
       items: RETAIL_SJT_ITEMS,
@@ -560,7 +566,12 @@ const RETAIL_PIPELINE: PipelineBlock[] = [
     ],
     {
       kind: "integrity_test",
-      domains: ["rule_adherence", "dependability", "cwb_attitudes"], // retail shrink preset (§4.4.10)
+      domains: ["rule_adherence", "dependability", "cwb_attitudes"],
+      criterionMappings: [
+        { unit: "rule_adherence", attributeId: "rt-att-hon" },
+        { unit: "dependability", attributeId: "rt-att-dep" },
+        { unit: "cwb_attitudes", attributeId: "rt-att-hon" },
+      ],
       lengthItems: 18,
       format: "likert",
     },
@@ -602,7 +613,6 @@ const RETAIL_PIPELINE: PipelineBlock[] = [
         },
       ],
       prefillFromCv: false,
-      dedupeRule: "email_vacancy_resume",
     },
     { scored: false },
   ),
@@ -651,10 +661,9 @@ const RETAIL_VACANCY: VacancyV2 = {
 
 /* ============================================================
    PRESET 2 — Senior Backend Engineer (tech pack)
-   Method rationale: stacks the highest-validity methods — structured
-   behavioral interview (ρ ≈ .42) + work-sample coding (ρ ≈ .33) +
-   structured human panel — with the CV kept as context/verification
-   (experience alone predicts ≤ .10). AI use in the coding task is
+   Method rationale: triangulates standardized behavioral evidence, a
+   representative coding work sample and independent human review. The CV is
+   kept as context and a source of claims to verify. AI use in the coding task is
    disclosed-and-allowed and probed at the panel (R-IV.4).
    ============================================================ */
 
@@ -745,7 +754,8 @@ const BE_CATEGORIES: CategorySpec[] = [
             label: "At least 5 years of professional backend development experience",
             humanRecoverable: true,
           },
-          rationale: "Experience is a floor, not a score — alone it predicts ≤ .10 (R-I.1).",
+          rationale:
+            "Experience is an eligibility and context requirement here, not a performance score; material claims require verification.",
         },
       ),
     ],
@@ -830,7 +840,7 @@ const BE_QUESTIONS: InterviewQuestion[] = [
       "What broke or surprised you after launch, and what did you change?",
     ],
     BE_DESIGN_ANCHORS,
-    "Behavioral format: past-behavior questions retain validity for high-complexity roles (Huffcutt, R-I.2).",
+    "Structured past-work evidence is job-related here; job experts must confirm content coverage and use the same question, probes, and rubric for every candidate.",
   ),
   vidQ(
     "be-q2", "be-att-decide",
@@ -887,9 +897,9 @@ const BE_PIPELINE: PipelineBlock[] = [
       kind: "cv_intake",
       acceptedFormats: ["pdf", "docx"],
       maxSizeMb: 10,
-      parseTargets: ["employment", "education", "certifications", "skills", "links"],
+      parseTargets: [],
       anonymizeForReview: true,
-      extractClaims: true,
+      extractClaims: false,
       portfolioUrlField: true,
     },
     { scored: false, deadlineOffsetHours: 48 },
@@ -910,9 +920,9 @@ const BE_PIPELINE: PipelineBlock[] = [
       questions: BE_QUESTIONS,
       followUpPolicy: 1,
       order: "fixed",
-      introVideo: "ai_presenter",
-      practiceQuestion: true,
-      pauseAllowance: 1,
+      introVideo: "none",
+      practiceQuestion: false,
+      pauseAllowance: 0,
       reviewBeforeSubmit: false,
     },
     { integrityTier: 1, gate: { minBlockScore: 55 } },
@@ -930,30 +940,34 @@ const BE_PIPELINE: PipelineBlock[] = [
       kind: "coding",
       environment: "browser_ide",
       languages: ["TypeScript", "Python", "Go", "Java"],
-      taskSource: "bank",
+      taskSource: "custom",
       brief:
-        "Implement a rate-limited task queue: enqueue jobs with priorities, execute at most N concurrently, retry failures with backoff, and expose queue stats. Hidden tests cover ordering, concurrency limits, retry timing, and edge cases (empty queue, duplicate ids, burst enqueue).",
-      scoringSplit: { correctness: 55, quality: 45, approach: 0 }, // approach is probed live at the panel instead
+        "In the browser source editor, implement a rate-limited task queue: enqueue jobs with priorities, execute at most N concurrently, retry failures with backoff, and expose queue stats. The editor does not execute code; reviewers assess the submitted source and explanation against the frozen rubric.",
+      scoringSplit: { correctness: 55, quality: 30, approach: 15 },
       timeCapMin: 90,
       aiPolicy: "disclosed", // Codility Cody pattern: allowed, attached, discussed (R-III.13)
-      similarityCheck: true,
+      similarityCheck: false,
       rubricDimensions: [
         {
           id: "be-dim-correct",
+          attributeId: "be-att-quality",
+          codingScoringArea: "correctness",
           name: "Correctness & edge handling",
           weight: 55,
           anchors: [
-            "Core path fails hidden tests; edge cases unconsidered.",
-            "Happy path passes; concurrency or retry edge cases fail.",
-            "All primary tests pass; one edge family (bursts, duplicates) misses.",
-            "Full test matrix passes, including concurrency limits and retry backoff timing.",
-            "Everything passes, and the solution defends against cases the tests don't cover — idempotent enqueue, clean shutdown — noted in comments.",
+            "The submitted source does not implement the core path and does not address edge cases.",
+            "The source describes a plausible happy path but mishandles concurrency or retry edge cases.",
+            "The source implements the primary paths and explains most edge-case handling, with one important gap.",
+            "The source and explanation cover ordering, concurrency limits, retries, and the stated edge cases coherently.",
+            "The source is complete against the brief and explicitly defends additional relevant failure modes such as idempotent enqueue and clean shutdown.",
           ],
         },
         {
           id: "be-dim-clarity",
+          attributeId: "be-att-design",
+          codingScoringArea: "quality",
           name: "Code clarity & maintainability",
-          weight: 45,
+          weight: 30,
           anchors: [
             "A single tangle of state; renaming one thing requires reading everything.",
             "Works, but queueing, execution, and stats logic live in one structure.",
@@ -962,13 +976,27 @@ const BE_PIPELINE: PipelineBlock[] = [
             "Reads like library code: minimal API surface, deliberate data structures, and the tricky concurrency part isolated and documented.",
           ],
         },
+        {
+          id: "be-dim-approach",
+          attributeId: "be-att-decide",
+          codingScoringArea: "approach",
+          name: "Problem-solving approach & trade-offs",
+          weight: 15,
+          anchors: [
+            "Cannot explain the chosen approach or its effect on the stated constraints.",
+            "Names an approach after the fact but gives little decision evidence or verification.",
+            "Explains a workable approach, key trade-off and a relevant check against the requirements.",
+            "Compares credible alternatives, makes assumptions explicit and verifies the riskiest behavior.",
+            "Uses a disciplined, economical decision process, tests failure modes and explains when a different design would be preferable.",
+          ],
+        },
       ],
     },
     { integrityTier: 1, gate: { minBlockScore: 60 } },
   ),
   blk(
     "be-blk-panel", 4, "Panel interview",
-    "A live conversation with the hiring manager and a senior engineer. They use the same criteria as every earlier step and score independently before comparing notes. You book the time.",
+    "A live conversation with the hiring manager and a senior engineer. They use the same criteria as every earlier step and score independently before comparing notes. The hiring team coordinates the time with you.",
     60,
     [
       { attributeId: "be-att-design", share: 25 },
@@ -980,10 +1008,10 @@ const BE_PIPELINE: PipelineBlock[] = [
     {
       kind: "human_stage",
       panel: ["Hiring Manager", "Staff Engineer (bar raiser)"],
-      selfBooking: true,
-      interviewKitAuto: true, // AI-flagged weak attributes become suggested probe areas (§4.4.18)
+      selfBooking: false,
+      interviewKitAuto: false,
       independentBeforeDiscussion: true,
-      aiNotetaker: true,
+      aiNotetaker: false,
     },
   ),
 ];
@@ -1015,7 +1043,7 @@ const BE_VACANCY: VacancyV2 = {
   },
   categories: BE_CATEGORIES,
   pipeline: BE_PIPELINE,
-  scoring: scoringPolicy(65, ["focus_attributes", "work_sample"], true),
+  scoring: scoringPolicy(65, ["focus_attributes", "work_sample"]),
   experience: experienceCfg(
     "neutral",
     "A product engineering team that runs what it ships.",
@@ -1244,16 +1272,16 @@ const TL_PIPELINE: PipelineBlock[] = [
       kind: "cv_intake",
       acceptedFormats: ["pdf", "docx"],
       maxSizeMb: 10,
-      parseTargets: ["employment", "education", "certifications", "skills", "links"],
+      parseTargets: [],
       anonymizeForReview: true,
-      extractClaims: true,
+      extractClaims: false,
       portfolioUrlField: false,
     },
     { scored: false, deadlineOffsetHours: 48 },
   ),
   blk(
     "tl-blk-interview", 2, "Structured interview",
-    "A structured video interview: five questions, one per competency, the same for every candidate. Only the transcript of what you say is scored, against published criteria for this role — never how you look or sound.",
+    "A structured recorded video interview: five questions, one per competency, the same for every candidate. Camera and microphone answers are transcribed; only reviewed answer evidence is scored. No frame, gaze, appearance, voice or alleged reading inference is produced, and a text accommodation remains available.",
     25,
     [
       { attributeId: "tl-att-lead", share: 25 },
@@ -1267,16 +1295,16 @@ const TL_PIPELINE: PipelineBlock[] = [
       questions: TL_QUESTIONS,
       followUpPolicy: 1,
       order: "fixed",
-      introVideo: "ai_presenter",
-      practiceQuestion: true,
-      pauseAllowance: 1,
+      introVideo: "none",
+      practiceQuestion: false,
+      pauseAllowance: 0,
       reviewBeforeSubmit: false,
     },
     { integrityTier: 1, gate: { minBlockScore: 60 } },
   ),
   blk(
     "tl-blk-docs", 3, "Documents",
-    "Upload the documents that confirm the qualifications discussed — diploma and any certifications you named. A mismatch never rejects you automatically; a person reviews every case.",
+    "Upload PDF or DOCX documents whose contents address the published qualification requirement. A named reviewer checks the contents; this stage does not independently verify the issuer or authenticity.",
     6,
     [{ attributeId: "tl-att-growth", share: 100 }], // informational: verified claims lift confidence on Growth Potential
     {
@@ -1285,8 +1313,8 @@ const TL_PIPELINE: PipelineBlock[] = [
         { id: "tl-doc-diploma", label: "Diploma / degree certificate" },
         { id: "tl-doc-cert", label: "Certifications named in the interview" },
       ],
-      acceptedFormats: ["pdf", "jpg", "png"],
-      mode: "auto_extract_match",
+      acceptedFormats: ["pdf", "docx"],
+      mode: "manual_document_review",
       idCheck: false,
       placement: "post_shortlist",
     },
@@ -1294,7 +1322,7 @@ const TL_PIPELINE: PipelineBlock[] = [
   ),
   blk(
     "tl-blk-panel", 4, "Panel interview",
-    "A live conversation with the hiring manager and the engineering director. They use the same five competencies and the same anchored scales as every earlier step, and score independently before comparing notes. You book the time.",
+    "A live conversation with the hiring manager and the engineering director. They use the same five competencies and the same anchored scales as every earlier step, and score independently before comparing notes. The hiring team coordinates the time with you.",
     60,
     [
       { attributeId: "tl-att-lead", share: 25 },
@@ -1306,10 +1334,10 @@ const TL_PIPELINE: PipelineBlock[] = [
     {
       kind: "human_stage",
       panel: ["Hiring Manager", "Engineering Director"],
-      selfBooking: true,
-      interviewKitAuto: true,
+      selfBooking: false,
+      interviewKitAuto: false,
       independentBeforeDiscussion: true,
-      aiNotetaker: true,
+      aiNotetaker: false,
     },
   ),
 ];
@@ -1339,8 +1367,8 @@ const TL_VACANCY: VacancyV2 = {
     languages: { primary: "en", alternates: ["ru"] },
   },
   categories: TL_CATEGORIES,
-  pipeline: TL_PIPELINE,
-  scoring: scoringPolicy(65, ["focus_attributes", "earlier_submission"], true),
+  pipeline: TL_PIPELINE.filter((block) => block.kind === "async_interview"),
+  scoring: scoringPolicy(65, ["focus_attributes", "earlier_submission"]),
   experience: experienceCfg(
     "neutral",
     "A platform team that owns its systems and its decisions.",
@@ -1362,7 +1390,7 @@ export const BUILT_IN_PRESETS: Preset[] = [
     scope: "vacancy",
     name: "Retail Store Associate — hourly",
     description:
-      "Hourly retail pipeline: knockout → written interview (4 situational questions — hypotheticals suit low-complexity, low-experience pools per the Huffcutt moderator) → 8-item behavioral-tendency SJT (low cognitive loading, low adverse impact) → short overt integrity module for register and shrink exposure (ρ ≈ .31, d ≈ 0) → availability form. About 30 minutes of candidate time, camera-free throughout.",
+      "Hourly retail pipeline: knockout → written structured interview → SME-reviewed situational-judgment pilot → configured overt integrity instrument for the documented register/shrink requirement → availability form. Instrument evidence, accessibility and local subgroup outcomes must be reviewed before selection use. About 30 minutes of candidate time, camera-free throughout.",
     version: "1.0.0",
     builtIn: true,
     payload: RETAIL_VACANCY,
@@ -1372,7 +1400,7 @@ export const BUILT_IN_PRESETS: Preset[] = [
     scope: "vacancy",
     name: "Senior Backend Engineer",
     description:
-      "Senior engineering pipeline stacking the highest-validity methods: knockout → CV intake (context and claims, not a score — experience alone predicts ≤ .10) → structured behavioral interview, 5 questions (ρ ≈ .42, the validity champion) → browser coding work sample with a disclosed AI-use policy and a two-dimension rubric (ρ ≈ .33) → human panel scoring the same BARS independently before discussion.",
+      "Senior engineering pipeline triangulating job-related evidence: knockout → CV intake (context and claims, not a score) → five-question structured behavioral interview → representative browser coding work sample with a disclosed AI-use policy and a two-dimension rubric → human panel scoring the frozen BARS independently before discussion. Local outcome and fairness monitoring remain required.",
     version: "1.0.0",
     builtIn: true,
     payload: BE_VACANCY,
@@ -1382,7 +1410,7 @@ export const BUILT_IN_PRESETS: Preset[] = [
     scope: "vacancy",
     name: "Team Lead — Platform",
     description:
-      "The demo Team Lead vacancy, formalized: five behavioral competencies (Leadership, Decision-Making, Communication, Stress-Resilience, Growth Potential) measured by a structured async interview — one STAR-eliciting question per attribute (structured interviews are the best validity-per-fairness method, ρ ≈ .42) — then document verification of credential claims and a human panel on the same anchored scales.",
+      "Launch-ready recorded video interview: five job-related competencies, one structured evidence question per attribute, transcript review, no camera-behaviour inference, and named human review of every outcome.",
     version: "1.0.0",
     provenance: "derived from vacancy vac-001 (Team Lead — Core Platform demo)",
     builtIn: true,

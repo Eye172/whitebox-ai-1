@@ -1,4 +1,9 @@
-import type { ConfidenceBand, Tier, VerificationStatus, VacancyStatus } from "@/lib/fixtures";
+import type {
+  ConfidenceBand,
+  Tier,
+  VerificationStatus,
+  VacancyStatus,
+} from "@/lib/types";
 
 /* Status pill — pastel tint + bold mono label + leading dot (Book I · Part IV) */
 const pillTones: Record<string, string> = {

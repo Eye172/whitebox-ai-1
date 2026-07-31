@@ -38,6 +38,7 @@ export interface CompetencyScore {
   evidence: EvidenceSpan[];
   trace: string[];
   docVerified?: boolean;
+  abstained?: boolean;
 }
 
 export type AuditAction =
@@ -56,16 +57,27 @@ export interface AuditEntry {
 }
 
 export interface Candidate {
+  applicationId?: string;
   internalId: string;
-  rank: number;
+  /**
+   * Ordinal position among complete, rank-eligible evaluations only.
+   * Incomplete evaluations are shown in a separate review queue and never
+   * receive a synthetic place at the bottom of the ranking.
+   */
+  rank: number | null;
   overall: number;
-  tier: Tier;
+  /**
+   * A substantive threshold tier exists only for complete evaluations.
+   * `null` means the frozen evidence policy withheld threshold comparison.
+   */
+  tier: Tier | null;
   confidence: ConfidenceBand;
   confidencePhrase: string;
   verification: VerificationStatus;
   divergence: boolean;
-  integrityAdvisory: boolean;
   appliedAt: string;
+  evaluationComplete?: boolean;
+  evaluationCoverage?: number;
   competencies: CompetencyScore[];
   strengths: string[];
   weaknesses: string[];
@@ -86,6 +98,25 @@ export interface Vacancy {
 /* ———————————————————————— criteria architecture (SPEC §4.3) ———————————————————————— */
 
 export type AttributeKind = "skill" | "trait" | "knowledge" | "qualification" | "experience" | "language";
+export type VerificationMethod =
+  | "self_report"
+  | "interview"
+  | "test"
+  | "document"
+  | "reference"
+  | "work_sample"
+  | "human_observation";
+export type CriterionPriority = "essential" | "important" | "supporting";
+
+export interface AttributeEvidenceRequirement {
+  priority: CriterionPriority;
+  targetLevel: 1 | 2 | 3 | 4 | 5;
+  methods: VerificationMethod[];
+  minIndependentSources: 1 | 2 | 3;
+  requiredForDecision: boolean;
+  notes: string[];
+  specialRequirements: string[];
+}
 
 /* 5 levels, each with a concrete BARS behavioral anchor (R-I.2) */
 export interface ProficiencyScale {
@@ -113,6 +144,11 @@ export interface AttributeSpec {
   mustHave?: MustHave;
   scale: ProficiencyScale;
   verification: "self_report" | "interview" | "test" | "document" | "reference";
+  /**
+   * Multi-source evidence policy. `verification` remains the primary legacy
+   * method; this policy is the source of truth for newly published vacancies.
+   */
+  evidenceRequirement?: AttributeEvidenceRequirement;
   taxonomyRef?: { system: TaxonomySystem; code: string };
   rationale?: string; // "why this" — every generated field explains itself
 }
@@ -162,7 +198,7 @@ export interface InterviewQuestion {
   id: string;
   text: string;
   attributeId: string; // exactly one primary
-  secondaryAttributeId?: string; // reduced share
+  secondaryAttributeId?: string; // contextual observation only; needs its own anchored item to score
   type: QuestionType;
   thinkTimeSec: 0 | 30 | 60 | 120 | null; // null = untimed
   answerCapSec: number; // 30..300
@@ -170,6 +206,8 @@ export interface InterviewQuestion {
   reRecordAttempts: 0 | 1 | 2 | 3;
   notesAllowed: boolean;
   probes: string[]; // pre-approved anchored probes only (R-I.8)
+  clarification?: string; // pre-approved equivalent rephrase, same construct and rubric
+  situationalFallback?: string; // pre-approved equivalent scenario when no past example exists
   rubric: Rubric;
   source: AuthorSource;
   rationale?: string;
@@ -183,6 +221,7 @@ export type FormFieldType =
 
 export interface FormField {
   id: string;
+  attributeId?: string;
   label: string;
   type: FormFieldType;
   required: boolean;
@@ -195,7 +234,8 @@ export interface ApplicationFormSettings {
   kind: "application_form";
   fields: FormField[];
   prefillFromCv: boolean;
-  dedupeRule: "email_vacancy_resume";
+  /** Legacy metadata only. No duplicate-detection runtime is implied. */
+  dedupeRule?: "email_vacancy_resume";
 }
 
 export type KnockoutItemType = "yes_no" | "numeric_threshold" | "single_choice" | "multi_must_include";
@@ -237,7 +277,7 @@ export interface AsyncInterviewSettings {
   order: "fixed" | "randomized";
   introVideo: "recruiter" | "ai_presenter" | "none";
   introScript?: string;
-  practiceQuestion: true; // non-removable (tech-check equity)
+  practiceQuestion: boolean; // publishable only when an unscored capture flow exists
   pauseAllowance: 0 | 1 | 2; // pauses ≤ 5 min
   reviewBeforeSubmit: boolean; // off default for video, on for text
 }
@@ -298,6 +338,10 @@ export type CognitiveSubtest = "numerical" | "verbal" | "logical" | "spatial" | 
 export interface CognitiveSettings {
   kind: "cognitive";
   subtests: CognitiveSubtest[];
+  criterionMappings?: {
+    unit: CognitiveSubtest;
+    attributeId: string;
+  }[];
   itemsPerSubtest: number; // 6–15
   adaptive: boolean;
   totalTimeMin: number;
@@ -318,6 +362,10 @@ export interface PersonalitySettings {
 export interface IntegrityTestSettings {
   kind: "integrity_test";
   domains: ("rule_adherence" | "safety" | "dependability" | "cwb_attitudes")[];
+  criterionMappings?: {
+    unit: "rule_adherence" | "safety" | "dependability" | "cwb_attitudes";
+    attributeId: string;
+  }[];
   lengthItems: number;
   format: "likert" | "forced_choice";
 }
@@ -350,6 +398,10 @@ export interface LanguageTestSettings {
   kind: "language_test";
   language: string;
   skills: ("reading" | "listening" | "writing" | "speaking")[];
+  criterionMappings?: {
+    unit: "reading" | "listening" | "writing" | "speaking";
+    attributeId: string;
+  }[];
   targetLevel: CefrLevel;
   minutesPerSkill: number;
 }
@@ -358,8 +410,25 @@ export type AiUsePolicy = "forbidden" | "disclosed" | "expected"; // §4.4.13, d
 
 export interface RubricDimension {
   id: string;
+  /**
+   * Criterion scored by this dimension. It remains optional only so frozen
+   * single-criterion legacy vacancies can be migrated without changing their
+   * meaning; new multi-criterion blocks must bind every dimension explicitly.
+   */
+  attributeId?: string;
+  /**
+   * Coding rubrics additionally bind each dimension to one published scoring
+   * area. It remains optional so already-frozen legacy vacancies can still be
+   * evaluated; publication preflight requires it on newly published coding
+   * blocks.
+   */
+  codingScoringArea?: "correctness" | "quality" | "approach";
   name: string;
-  weight: number; // sums to 100 across dimensions
+  /**
+   * Relative dimension weight. Coding dimensions are normalized within their
+   * codingScoringArea before the cross-area scoringSplit is applied.
+   */
+  weight: number;
   anchors: [string, string, string, string, string];
 }
 
@@ -403,7 +472,13 @@ export interface DocVerificationSettings {
   kind: "doc_verification";
   requiredDocuments: { id: string; label: string; qualificationAttributeId?: string }[];
   acceptedFormats: string[];
-  mode: "auto_extract_match"; // + human adjudication tray; mismatch flags confidence, never auto-rejects
+  /**
+   * `manual_document_review` lets a named reviewer assess whether the
+   * submitted contents meet the published requirement. It does not claim
+   * external authenticity. `auto_extract_match` remains pending until a
+   * connected provider creates a server-owned result receipt.
+   */
+  mode: "manual_document_review" | "auto_extract_match";
   idCheck: boolean; // tier 3, optional here
   placement: "in_flow" | "post_shortlist";
 }
@@ -421,7 +496,12 @@ export interface HumanStageSettings {
   kind: "human_stage";
   panel: string[]; // interviewer names/roles
   selfBooking: boolean;
-  interviewKitAuto: boolean; // AI-flagged weak attributes → suggested probe areas w/ same BARS
+  bookingUrl?: string;
+  /**
+   * Reserved legacy control. New publication fails closed when enabled until a
+   * generated-kit approval receipt and frozen panel-delivery runtime exist.
+   */
+  interviewKitAuto: boolean;
   independentBeforeDiscussion: true; // R-I.2 #13
   aiNotetaker: boolean; // consented, draft scorecard for human edit
 }
@@ -458,6 +538,19 @@ export interface PipelineBlock {
   languageOverride?: string;
   retakePolicy: 0 | 1 | 2; // whole-block retakes for technical failure
   deadlineOffsetHours?: number;
+  evidenceRole?: "primary" | "corroborating" | "verification" | "context";
+  assessorInstructions?: string;
+  internalNotes?: string[];
+  tags?: string[];
+  validation?: {
+    strategy: "content" | "criterion" | "construct" | "transport";
+    status: "draft" | "sme_reviewed" | "pilot" | "locally_validated";
+    scoreUse: "context_only" | "decision_support" | "selection";
+    evidenceRefs: string[];
+    reviewedBy?: string;
+    reviewedAt?: string;
+    applicabilityNote?: string;
+  };
 }
 
 /* ———————————————————————— scoring policy (SPEC §4.5) ———————————————————————— */
@@ -471,6 +564,15 @@ export interface ScoringPolicy {
   anonymization: { maskPII: boolean; revealAtStage: "decision" | "invited" };
   abstainPolicy: { minEvidencePerAttribute: number; onAbstain: "flag_human" };
   normalization: "absolute_rubric"; // rubric-referenced, never cohort-normed silently
+  aggregation?: {
+    acrossSources:
+      | "evidence_weighted_mean"
+      | "conservative_floor"
+      | "highest_quality_source";
+    contradictoryEvidence: "flag_human" | "use_lower_confidence";
+    optionalBlocks: "exclude_if_missing" | "include_when_completed";
+    minimumCoveragePct: number;
+  };
 }
 
 /* ———————————————————————— position profile (SPEC §4.2) ———————————————————————— */
@@ -498,8 +600,43 @@ export interface PositionProfile {
   mission: string; // 1–3 sentences, landing + evaluation prompt context
   responsibilities: string[];
   teamContext?: string;
+  successOutcomes?: string[];
+  operatingConstraints?: string[];
+  stakeholderGroups?: string[];
+  specialRequirements?: string[];
+  internalComments?: string[];
+  tags?: string[];
   industryPack: IndustryPack;
   languages: { primary: string; alternates: string[] };
+}
+
+export interface AssessmentDesignConfig {
+  purpose: "selection" | "screening" | "internal_mobility" | "development";
+  jobAnalysis: {
+    method:
+      | "structured_workshop"
+      | "critical_incidents"
+      | "task_inventory"
+      | "competency_model"
+      | "mixed";
+    sources: string[];
+    criticalWorkOutputs: string[];
+    approvedBy?: string;
+    approvedAt?: string;
+  };
+  validation: {
+    monitoringMode: "prelaunch_review" | "pilot" | "operational";
+    outcomeCriteria: string[];
+    reviewCadenceDays: number;
+    minimumSampleForAnalysis: number;
+    adverseImpactMonitoring: boolean;
+  };
+  decisionPolicy: {
+    humanFinalDecision: true;
+    allowAutomatedRejection: false;
+    requireReasonCode: true;
+    requireEvidenceCitation: true;
+  };
 }
 
 /* ———————————————————————— candidate experience (SPEC §4.6) ———————————————————————— */
@@ -559,12 +696,24 @@ export interface VacancyV2 {
   code: string; // WBX- + 4 base-32 chars
   status: VacancyStatus;
   configVersion: number; // immutable once live; changes create a new version
+  /**
+   * Server-owned rollout marker. Historical vacancy configs intentionally do
+   * not have this field and keep their deterministic evaluation behavior.
+   * New vacancy IDs are stamped at first publication and require the real
+   * provider for every AI-derived result.
+   */
+  aiExecution?: {
+    mode: "openai_required";
+    policyVersion: "openai-required-v1";
+    assignedAt: string;
+  };
   profile: PositionProfile;
   categories: CategorySpec[];
   pipeline: PipelineBlock[];
   scoring: ScoringPolicy;
   experience: CandidateExperienceConfig;
   governance: GovernanceConfig;
+  assessmentDesign?: AssessmentDesignConfig;
   distribution: ChannelLink[];
   window: { opensAt: string; closesAt: string; timezone: string };
   capacity?: { maxSubmissions?: number };
@@ -610,7 +759,14 @@ export type IntegritySignalLevel = "none" | "low" | "medium";
 
 export interface IntegritySignal {
   id: string;
-  kind: "tab_switch" | "paste" | "latency" | "similarity" | "liveness" | "ai_text" | "typing_pattern";
+  kind:
+    | "tab_switch"
+    | "paste"
+    | "latency"
+    | "similarity"
+    | "liveness"
+    | "ai_text"
+    | "typing_pattern";
   level: IntegritySignalLevel;
   note: string; // neutral wording — advisory context, never a verdict
 }
@@ -622,6 +778,7 @@ export interface EngineStamp {
   rubricVersion: string;
   runs: number; // k self-consistency runs
   scoredAt: string;
+  providerResponseId?: string;
 }
 
 export interface ItemScore {
@@ -663,8 +820,30 @@ export interface ClaimRecord {
   id: string;
   text: string; // "led team of 8", "AWS cert 2024"
   sourceBlockId: string;
+  sourceItemId?: string;
+  sourceVacancyId?: string;
+  sourceVacancyVersion?: number;
   material: boolean;
   status: "VERIFIED" | "NOT_VERIFIED" | "UNCHECKED";
+}
+
+export interface EvaluationGateResult {
+  blockId: string;
+  blockTitle: string;
+  topology: ScoringPolicy["topology"];
+  configured: boolean;
+  status: "not_applicable" | "pending" | "passed" | "failed";
+  minimumBlockScore: number | null;
+  actualBlockScore: number | null;
+  mustHaveIds: string[];
+  failedMustHaveIds: string[];
+  pendingMustHaveIds: string[];
+  requiresAdjudication: boolean;
+  reason: string;
+  waiver: {
+    outcome: "none" | "waived" | "upheld" | "conflict";
+    reviewIds: string[];
+  };
 }
 
 export interface CandidateEvaluation {
@@ -672,7 +851,13 @@ export interface CandidateEvaluation {
   attributeScores: CompetencyScore[];
   categoryScores: { categoryId: string; score: number }[];
   overall: number;
-  tier: Tier;
+  complete?: boolean;
+  coverage?: number;
+  /**
+   * Frozen policies prohibit a substantive tier while required evidence is
+   * incomplete. Historical complete evaluations retain their existing tier.
+   */
+  tier: Tier | null;
   confidence: ConfidenceBand;
   confidencePhrase: string;
   synthesis: {
@@ -682,6 +867,7 @@ export interface CandidateEvaluation {
     narrative: string; // 6–10 sentences, cites chip ids
   };
   mustHaveResults: { id: string; passed: boolean; evidence: string }[];
+  gateResults?: EvaluationGateResult[];
   claims: ClaimRecord[];
   engine: EngineStamp;
 }
@@ -702,6 +888,30 @@ export interface BlockRuntimeResult {
   payload: unknown;
   transcript?: { speaker: "ai" | "candidate"; text: string; at: string; itemId?: string; kind?: "main" | "followup" }[];
   integrityEvents: IntegritySignal[];
+  /**
+   * Server-created evidence pointers. Candidate payloads are never copied into
+   * this namespace and browsers cannot assert these receipts.
+   */
+  serverEvidence?: {
+    documentVerifications?: {
+      receiptId: string;
+      providerId: string;
+      providerVersion: string;
+      responseHash: string;
+      verifiedAt: string;
+      sourceItemIds: string[];
+      outcome: "verified" | "not_verified";
+    }[];
+    referenceResponses?: {
+      receiptId: string;
+      invitationId: string;
+      refereeOrdinal: number;
+      questionnaireHash: string;
+      responseHash: string;
+      respondedAt: string;
+      sourceItemIds: string[];
+    }[];
+  };
 }
 
 export interface ApplicationRecord {

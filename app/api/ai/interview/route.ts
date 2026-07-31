@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
-import { interviewStepStub, type InterviewStepRequest } from "@/lib/ai";
 
-/* POST /api/ai/interview — Book V · §V.3 call #2 (adaptive interview agent).
-   Real implementation: LiveKit Agents loop → STT → LangGraph stateful agent → TTS.
-   This handler keeps the same request/response contract so the client UI
-   does not change when the realtime stack lands. */
-export async function POST(req: Request) {
-  const body = (await req.json()) as InterviewStepRequest;
-  if (!body?.competencies?.length) {
-    return NextResponse.json({ error: "Missing interview config." }, { status: 422 });
-  }
-  await new Promise((r) => setTimeout(r, 700)); // "thinking" pause — cube pulses meanwhile
-  return NextResponse.json(interviewStepStub(body));
+/**
+ * The prototype endpoint accepted the complete interview plan and history from
+ * the browser. It is intentionally retired: candidate interviews now use the
+ * authenticated, server-owned `/api/candidate/interviews/:id/turn` endpoint.
+ */
+export function POST() {
+  return NextResponse.json(
+    {
+      error: "This endpoint has been retired. Resume the interview through the secure candidate session.",
+      code: "ENDPOINT_RETIRED",
+    },
+    {
+      status: 410,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+        "X-Content-Type-Options": "nosniff",
+      },
+    },
+  );
 }

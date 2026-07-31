@@ -1,102 +1,93 @@
 "use client";
 
-/* Vacancy Studio state — SPEC §4. One draft VacancyV2, persisted locally,
-   consumed by every step surface via useStudio(). Steps are a left rail,
-   not a forced wizard: `step` is navigation only; the preflight validator
-   (lib/studio.ts) is the only gatekeeper to publishing. */
-
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import type { VacancyV2 } from "@/lib/types";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createEmptyDraft } from "@/lib/studio";
+import type { Role, VacancyV2 } from "@/lib/types";
 import { STORE_KEYS } from "@/lib/types";
 
-export function createEmptyDraft(): VacancyV2 {
-  return {
-    id: "vac-draft",
-    code: "",
-    status: "DRAFT",
-    configVersion: 1,
-    profile: {
-      title: "",
-      openings: 1,
-      seniority: "Middle",
-      employmentType: "full_time",
-      workMode: "hybrid",
-      locations: [],
-      mission: "",
-      responsibilities: [],
-      industryPack: "tech",
-      languages: { primary: "en", alternates: [] },
-    },
-    categories: [],
-    pipeline: [],
-    scoring: {
-      topology: "hybrid",
-      weighting: "rational",
-      threshold: 65,
-      banding: { enabled: false, sedWidth: 4 },
-      tieBreakers: ["focus_attributes"],
-      anonymization: { maskPII: true, revealAtStage: "decision" },
-      abstainPolicy: { minEvidencePerAttribute: 1, onAbstain: "flag_human" },
-      normalization: "absolute_rubric",
-    },
-    experience: {
-      landing: { showCompensation: false, companyBlurb: "" },
-      notices: {
-        jurisdictionProfile: "EU",
-        aiDisclosure:
-          "Parts of this process are AI-assisted. Only the language content of your answers is scored — never your face, voice tone, appearance, or emotion. A named human reviews and decides.",
-        retentionDays: 180,
-        consentCheckpoints: ["entry", "recorded_blocks"],
-        version: 1,
-      },
-      comms: {
-        confirmationEnabled: true,
-        reminderCadence: 2,
-        dispositionSlaDays: 5,
-        feedbackOffer: true,
-        senderIdentity: "org",
-      },
-      tone: "neutral",
-    },
-    governance: {
-      roles: [{ userId: "u-ar", name: "a.rakhimova", role: "Owner", piiReveal: true }],
-      reviewPolicy: { independentReviews: 1, assignment: "round_robin" },
-      calibrationRequired: true,
-      dualControlThreshold: 25,
-      slaTargets: { reviewQueueHours: 48, dispositionDays: 5 },
-      changeControl: { editLive: ["Owner"], pauseClose: ["Owner", "HiringManager"] },
-    },
-    distribution: [],
-    window: { opensAt: "", closesAt: "", timezone: "Asia/Almaty" },
-    rollingReview: true,
-    audit: [],
-    createdAt: "",
-  };
+interface InitialReviewer {
+  userId: string;
+  name: string;
+  role: Role;
+  piiReveal: boolean;
 }
 
 interface StudioCtx {
   draft: VacancyV2;
-  /* immutable-update helper: update((d) => ({ ...d, profile: { ...d.profile, title } })) */
-  update: (mutate: (d: VacancyV2) => VacancyV2) => void;
-  replace: (d: VacancyV2) => void;
+  update: (mutate: (draft: VacancyV2) => VacancyV2) => void;
+  replace: (draft: VacancyV2) => void;
   resetBlank: () => void;
-  step: number; // 1..7
-  setStep: (n: number) => void;
-  /* false until the user picks an entry mode (Describe / Manual / Preset / Clone) */
+  step: number;
+  setStep: (step: number) => void;
   entered: boolean;
-  setEntered: (b: boolean) => void;
+  setEntered: (entered: boolean) => void;
 }
 
 const Ctx = createContext<StudioCtx | null>(null);
 
-export function useStudio(): StudioCtx {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("useStudio must be used inside <StudioProvider>");
-  return ctx;
+function withCurrentReviewer(
+  draft: VacancyV2,
+  reviewer: InitialReviewer,
+): VacancyV2 {
+  const roles = draft.governance.roles.filter(
+    (role) =>
+      role.userId !== "u-ar" &&
+      role.name.trim().toLowerCase() !== "a.rakhimova",
+  );
+  const exists = roles.some((role) => role.userId === reviewer.userId);
+  return {
+    ...draft,
+    governance: {
+      ...draft.governance,
+      roles: exists
+        ? roles.map((role) =>
+            role.userId === reviewer.userId ? reviewer : role,
+          )
+        : [reviewer, ...roles],
+    },
+  };
 }
 
-export default function StudioProvider({ children }: { children: React.ReactNode }) {
-  const [draft, setDraft] = useState<VacancyV2>(createEmptyDraft);
+export function useStudio(): StudioCtx {
+  const context = useContext(Ctx);
+  if (!context) {
+    throw new Error("useStudio must be used inside <StudioProvider>");
+  }
+  return context;
+}
+
+export default function StudioProvider({
+  children,
+  initialReviewer,
+}: {
+  children: React.ReactNode;
+  initialReviewer: InitialReviewer;
+}) {
+  const stableReviewer = useMemo(
+    () => ({
+      userId: initialReviewer.userId,
+      name: initialReviewer.name,
+      role: initialReviewer.role,
+      piiReveal: initialReviewer.piiReveal,
+    }),
+    [
+      initialReviewer.name,
+      initialReviewer.piiReveal,
+      initialReviewer.role,
+      initialReviewer.userId,
+    ],
+  );
+  const [draft, setDraft] = useState<VacancyV2>(() =>
+    withCurrentReviewer(createEmptyDraft(), stableReviewer),
+  );
   const [step, setStep] = useState(1);
   const [entered, setEntered] = useState(false);
   const hydrated = useRef(false);
@@ -105,45 +96,72 @@ export default function StudioProvider({ children }: { children: React.ReactNode
     try {
       const raw = localStorage.getItem(STORE_KEYS.draft);
       if (raw) {
-        const saved = JSON.parse(raw) as { draft: VacancyV2; entered: boolean; step: number };
+        const saved = JSON.parse(raw) as {
+          draft: VacancyV2;
+          entered: boolean;
+          step: number;
+        };
         if (saved?.draft) {
-          setDraft(saved.draft);
+          setDraft(withCurrentReviewer(saved.draft, stableReviewer));
           setEntered(saved.entered ?? false);
           setStep(saved.step ?? 1);
         }
       }
     } catch {
-      /* corrupted draft — start clean */
+      // Invalid local state is ignored; the fresh server-linked draft remains.
     }
     hydrated.current = true;
-  }, []);
+  }, [stableReviewer]);
 
   useEffect(() => {
     if (!hydrated.current) return;
     try {
-      localStorage.setItem(STORE_KEYS.draft, JSON.stringify({ draft, entered, step }));
+      localStorage.setItem(
+        STORE_KEYS.draft,
+        JSON.stringify({ draft, entered, step }),
+      );
     } catch {
-      /* storage full/unavailable — draft lives in memory only */
+      // The in-memory draft remains usable when browser storage is unavailable.
     }
   }, [draft, entered, step]);
 
-  const update = useCallback((mutate: (d: VacancyV2) => VacancyV2) => {
-    setDraft((d) => mutate(d));
-  }, []);
+  const update = useCallback(
+    (mutate: (current: VacancyV2) => VacancyV2) => {
+      setDraft((current) => mutate(current));
+    },
+    [],
+  );
 
-  const replace = useCallback((d: VacancyV2) => setDraft(d), []);
+  const replace = useCallback(
+    (next: VacancyV2) =>
+      setDraft(withCurrentReviewer(next, stableReviewer)),
+    [stableReviewer],
+  );
 
   const resetBlank = useCallback(() => {
-    setDraft(createEmptyDraft());
+    setDraft(withCurrentReviewer(createEmptyDraft(), stableReviewer));
     setStep(1);
     setEntered(false);
     try {
       localStorage.removeItem(STORE_KEYS.draft);
-    } catch {}
-  }, []);
+    } catch {
+      // No persisted draft to remove.
+    }
+  }, [stableReviewer]);
 
   return (
-    <Ctx.Provider value={{ draft, update, replace, resetBlank, step, setStep, entered, setEntered }}>
+    <Ctx.Provider
+      value={{
+        draft,
+        update,
+        replace,
+        resetBlank,
+        step,
+        setStep,
+        entered,
+        setEntered,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

@@ -1,15 +1,17 @@
 /* ============================================================
    BLOCK LIBRARY — SPEC §4.4 (19 block kinds, grouped A–E)
-   Metadata + factories for the Pipeline Composer. Validity league
-   table embedded from Sackett et al. 2022 (R-I.1); subgroup d where
-   known. Pure TS — no React, no side effects.
+   Metadata + factories for the Pipeline Composer.
+
+   This catalogue describes method families, not universal validity
+   coefficients. Whether a method is defensible for a real vacancy depends on
+   the frozen job analysis, content linkage, instrument/version, intended
+   population, accessibility, outcome criterion and local monitoring.
    ============================================================ */
 
 import type {
   BlockGroup,
   BlockKind,
   BlockSettings,
-  EvidenceLevel,
   PipelineBlock,
 } from "./types";
 
@@ -20,10 +22,8 @@ export interface BlockMeta {
   group: BlockGroup;
   label: string; // e.g. "Structured Async Interview"
   methodName: string; // named HR method, e.g. "Structured interview"
-  methodBasis: string; // one-liner, e.g. "Campion's 15 components by construction"
-  validity?: number; // operational validity ρ (Sackett 2022, R-I.1)
-  subgroupD?: string; // e.g. "d ≈ .2–.3"
-  evidenceLevel: EvidenceLevel;
+  methodBasis: string; // implementation and validation requirements
+  evidenceLevel: string;
   defaultMinutes: number;
   description: string; // 1–2 sentences for the library card
   candidateIntroTemplate: string; // states what it measures + why job-relevant (justice rule, R-I.7)
@@ -40,13 +40,12 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "screening",
     label: "Structured Application Form",
     methodName: "Structured biodata collection",
-    methodBasis: "Empirically keyed biodata reaches ρ ≈ .38 with modest subgroup differences; rational keys at launch.",
-    validity: 0.38,
-    subgroupD: "d ≈ .3",
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "Structured fields improve consistency. Any scored biodata key must be job-related, documented and validated for the intended use; contact data is never scored.",
+    evidenceLevel: "method-family research",
     defaultMinutes: 6,
     description:
-      "Collects contact details and structured application data. Choice questions can carry rational scoring keys — keyed biodata is one of the strongest low-adverse-impact predictors.",
+      "Collects contact details and structured application data. Choice questions may carry documented rational keys, while PII remains outside evaluation.",
     candidateIntroTemplate:
       "This short form collects the basics we need to process your application. Only clearly marked questions are scored, and contact details are never part of the evaluation.",
     researchRef: "R-I.1",
@@ -58,7 +57,7 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     label: "Knockout Questionnaire",
     methodName: "Minimum-qualifications screen",
     methodBasis: "Uniform Guidelines-safe screen: job-related, documented, and always human-recoverable.",
-    evidenceLevel: "vendor-validated",
+    evidenceLevel: "job analysis required",
     defaultMinutes: 3,
     description:
       "Checks documented minimum requirements before anyone invests time. Every failed knockout lands in a human-review tray — never the void.",
@@ -72,12 +71,12 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "screening",
     label: "CV / Résumé Intake",
     methodName: "Credential & history extraction",
-    methodBasis: "Experience and education alone predict ≤ .10 — the CV is context and verification, not a score.",
-    validity: 0.1,
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "A CV is candidate-supplied context and a source of claims to verify; it is not treated as a performance score.",
+    evidenceLevel: "context only",
     defaultMinutes: 4,
     description:
-      "Parses the CV into structured history and a claims ledger that feeds interview probes and document checks. Low standalone validity, so it informs rather than scores.",
+      "Stores the CV privately and records a receipt in the claims ledger. It informs accountable review and later verification rather than becoming a performance score.",
     candidateIntroTemplate:
       "Upload your CV so we can understand your experience. It provides context and verification for later steps — it is not scored on its own, and identifying details are hidden from reviewers by default.",
     researchRef: "R-I.1, R-I.6",
@@ -91,12 +90,10 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     label: "Structured Async Interview",
     methodName: "Structured interview",
     methodBasis: "Campion's 15 components by construction; transcript-only scoring.",
-    validity: 0.42,
-    subgroupD: "d ≈ .2–.3",
-    evidenceLevel: "meta-analytic",
+    evidenceLevel: "method-family research",
     defaultMinutes: 20,
     description:
-      "The flagship block: fixed questions, per-question BARS rubrics, anchored probing, transcript-only scoring. The best validity-to-adverse-impact ratio of any selection method.",
+      "Fixed core questions, bounded neutral probes and per-question BARS create comparable, auditable evidence. Only reviewed answer content is evaluated.",
     candidateIntroTemplate:
       "This structured interview asks every candidate for this role the same questions about real situations from your experience. Your answers are scored against published, job-related criteria — what you say, never how you look or sound.",
     researchRef: "R-I.1, R-I.2",
@@ -108,14 +105,12 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     label: "Live AI Interview",
     methodName: "Structured interview (live AI)",
     methodBasis: "Same structured base plan with real-time anchored probing; free-form question generation not offered.",
-    validity: 0.42,
-    subgroupD: "d ≈ .2–.3",
-    evidenceLevel: "meta-analytic",
+    evidenceLevel: "method-family research",
     defaultMinutes: 20,
     description:
-      "A real-time conversation with a disclosed AI interviewer, constrained to the base question plan plus pre-approved probes. Recommended as the verification follow-up for flagged async candidates.",
+      "A real-time conversation with a disclosed AI interviewer, constrained to the frozen core plan, equivalent rephrases and pre-approved evidence probes.",
     candidateIntroTemplate:
-      "You'll have a live conversation with an interviewer that is always disclosed as AI. It asks the same core questions as every candidate, with clarifying follow-ups. Only the transcript is scored, against job-related criteria — and you can request a human alternative at any time.",
+      "You'll have a live conversation with an interviewer that is always disclosed as AI. It asks the same core questions as every candidate, with bounded clarifying follow-ups. Only the reviewed transcript is scored against job-related criteria, and a text accommodation remains available.",
     researchRef: "R-I.2, R-I.8",
   },
 
@@ -124,13 +119,12 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "interviews",
     label: "Structured Chat Interview",
     methodName: "Structured interview (text)",
-    methodBasis: "Structured interview in text — camera-free, untimed, no bandwidth barrier.",
-    validity: 0.42,
-    subgroupD: "d ≈ .2–.3",
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "Structured interview in text with the same frozen question and rubric controls; any configured deadline or whole-stage limit is disclosed and enforced separately.",
+    evidenceLevel: "method-family research",
     defaultMinutes: 15,
     description:
-      "Camera-free, untimed structured interview in text. Highest accessibility and the best applicant reactions in text-first populations.",
+      "Camera-free structured interview in text, with the same frozen criteria, bounded probes and BARS as the recorded formats.",
     candidateIntroTemplate:
       "A text-based interview — no camera needed. Every candidate answers the same job-related questions, and your written answers are scored against the same criteria for everyone.",
     researchRef: "R-I.2, R-II.2",
@@ -143,9 +137,9 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "tests",
     label: "Situational Judgment Test",
     methodName: "Situational judgment test",
-    methodBasis: "Low-fidelity simulation of role dilemmas; hybrid scoring keys yield the highest item validities.",
-    validity: 0.26,
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "Job-specific dilemmas require SME review, a documented scoring key and pilot/local evidence before they may affect selection.",
+    evidenceLevel: "SME + local evidence required",
     defaultMinutes: 8,
     description:
       "Realistic role dilemmas with keyed response options — a low-fidelity simulation of the judgment calls the job actually requires.",
@@ -159,15 +153,14 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "tests",
     label: "Cognitive Ability Test",
     methodName: "General mental ability test",
-    methodBasis: "Valid but the largest adverse-impact driver — suggested weight ≤ 15% and late placement.",
-    validity: 0.31,
-    subgroupD: "d ≈ .7–.8 (adverse-impact caution)",
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "Use only a named, validated instrument with an accessibility plan, job-related rationale and local subgroup/outcome monitoring.",
+    evidenceLevel: "validated instrument required",
     defaultMinutes: 18,
     description:
-      "Reasoning subtests with optional adaptive difficulty. Valid, but carries the largest subgroup differences of any method — keep the weight low and the placement late.",
+      "Reasoning subtests from a configured validated provider. WhiteBox keeps the method unavailable until the exact instrument and its permitted use are documented.",
     candidateIntroTemplate:
-      "Short reasoning exercises related to the problem-solving this role involves. Two practice items come first and are never scored.",
+      "A named reasoning assessment selected for this role. The connected provider must disclose its instructions, practice experience, accessibility options and score use before you begin.",
     researchRef: "R-I.1, R-I.6",
   },
 
@@ -176,13 +169,12 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "tests",
     label: "Personality Questionnaire",
     methodName: "Personality self-report (Big Five / HEXACO)",
-    methodBasis: "Conscientiousness ρ ≈ .19–.22 with near-zero d; forced-choice format resists faking.",
-    validity: 0.19,
-    subgroupD: "d ≈ 0–.1",
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "Use only a named work-related instrument with construct evidence, accessibility review, permitted-use limits and local monitoring.",
+    evidenceLevel: "validated instrument required",
     defaultMinutes: 10,
     description:
-      "Work-contextualized Big Five / HEXACO questionnaire, forced-choice by default to resist faking. A fit signal capped at 20% of the composite — never a filter.",
+      "A configured work-related questionnaire from a validated provider. Generated or improvised personality items cannot affect selection.",
     candidateIntroTemplate:
       "A questionnaire about how you prefer to work. There are no right or wrong answers; it adds context to the overall picture and is never used on its own to reject anyone.",
     researchRef: "R-I.4",
@@ -193,13 +185,12 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "tests",
     label: "Integrity & Reliability",
     methodName: "Overt integrity test",
-    methodBasis: "Overt tests predict counterproductive behavior with near-zero subgroup differences.",
-    validity: 0.31,
-    subgroupD: "d ≈ 0",
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "Use only a named, validated overt instrument tied to a documented safety, asset or compliance requirement; generated items are prohibited.",
+    evidenceLevel: "validated instrument required",
     defaultMinutes: 6,
     description:
-      "Overt integrity questionnaire for roles with cash, safety, or compliance exposure. Respectable validity with near-zero subgroup differences.",
+      "A configured overt questionnaire for a documented cash, safety or compliance requirement. It cannot be generated ad hoc or become a sole decision rule.",
     candidateIntroTemplate:
       "A questionnaire about workplace situations involving rules and reliability — relevant because this role carries real responsibility for assets, safety, or compliance. It is never the sole reason for a decision.",
     researchRef: "R-I.4",
@@ -210,12 +201,12 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "tests",
     label: "Job Knowledge Test",
     methodName: "Job-knowledge test",
-    methodBasis: "ρ ≈ .40 — the highest-validity test block; the default pick over cognitive.",
-    validity: 0.4,
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "Items sample knowledge that the frozen job analysis identifies as necessary on entry; keys and open responses are reviewed against published content.",
+    evidenceLevel: "content evidence required",
     defaultMinutes: 12,
     description:
-      "Tests the knowledge the role actually uses day to day — the highest-validity test block and the recommended alternative to cognitive testing.",
+      "Tests knowledge the role demonstrably uses day to day, with item-level provenance, answer keys and SME review.",
     candidateIntroTemplate:
       "Questions about knowledge this role uses day to day. Knowing this material is directly tied to doing the job well.",
     researchRef: "R-I.1",
@@ -227,7 +218,7 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     label: "Language Proficiency",
     methodName: "CEFR-aligned proficiency assessment",
     methodBasis: "CEFR descriptors as the rubric; scored per skill against the attribute's target level.",
-    evidenceLevel: "vendor-validated",
+    evidenceLevel: "validated instrument required",
     defaultMinutes: 20,
     description:
       "CEFR-aligned check of the language skills the role requires, scored per skill against the target level set on the language attribute.",
@@ -244,11 +235,10 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     label: "Work Sample / Take-Home",
     methodName: "Work-sample test",
     methodBasis: "Samples over signs — direct observation of the work itself.",
-    validity: 0.33,
-    evidenceLevel: "meta-analytic",
+    evidenceLevel: "content evidence required",
     defaultMinutes: 120,
     description:
-      "A bounded piece of real work graded anonymously against a BARS rubric. Strong validity and the best-liked method among candidates.",
+      "A bounded piece of representative work graded anonymously against a published BARS rubric and checked for proportional candidate burden.",
     candidateIntroTemplate:
       "A small piece of real work, close to what the role actually involves — the fairest way to show what you can do. It is graded anonymously against a published rubric, and the AI-use policy is stated up front.",
     researchRef: "R-I.1, R-I.7",
@@ -259,12 +249,12 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "simulations",
     label: "Coding Assessment",
     methodName: "Work-sample test (software)",
-    methodBasis: "Work sample for software roles: hidden tests + quality rubric + defense probes.",
-    validity: 0.33,
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "A representative software work sample reviewed against a frozen quality rubric. Automated execution or a defense round may be used only when that exact service is connected and disclosed.",
+    evidenceLevel: "content evidence required",
     defaultMinutes: 60,
     description:
-      "A work sample for software roles: hidden tests for correctness, rubric-scored quality, and defense probes as the anti-outsourcing measure.",
+      "A software work sample that accepts reviewable source evidence and uses a published rubric. Unsupported execution, similarity and defense features remain unavailable instead of being simulated.",
     candidateIntroTemplate:
       "A hands-on coding task similar to this role's day-to-day work, graded on published criteria. The AI-use policy for this task is stated before you start.",
     researchRef: "R-I.1, R-III.7",
@@ -275,12 +265,12 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "simulations",
     label: "Case / In-Basket Exercise",
     methodName: "Assessment-center exercise",
-    methodBasis: "Exercise effect: variance clusters by exercise — score exercises, aggregate mechanically.",
-    validity: 0.29,
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "A representative, job-related scenario scored at the exercise level against frozen behavioral anchors.",
+    evidenceLevel: "content evidence required",
     defaultMinutes: 45,
     description:
-      "Case analysis, in-basket, role-play, or presentation. Scored at the exercise level — the assessment-center approach that actually replicates.",
+      "A configured case analysis or in-basket response, submitted as exact text or private artifacts and scored at the exercise level.",
     candidateIntroTemplate:
       "A realistic job scenario to work through — the kind of situation this role handles. Your response is scored on the quality of the outcome, against a published rubric.",
     researchRef: "R-I.4",
@@ -292,14 +282,15 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     kind: "doc_verification",
     group: "verification",
     label: "Documents & Credentials",
-    methodName: "Credential verification",
-    methodBasis: "Automated extraction and claim match; mismatches flag confidence, never auto-reject.",
-    evidenceLevel: "vendor-validated",
+    methodName: "Document content review",
+    methodBasis:
+      "Private artifacts are bound to the frozen application so a named reviewer can check whether their contents meet the published requirement. This does not establish issuer authenticity.",
+    evidenceLevel: "human content review",
     defaultMinutes: 6,
     description:
-      "Automated extraction and matching of diplomas, certifications, and licenses against claims. Mismatches flag confidence for human adjudication — never an auto-reject.",
+      "Collects PDF or DOCX evidence for manual content review. Receipt alone is not proof of authenticity, and a mismatch never auto-rejects.",
     candidateIntroTemplate:
-      "Upload the documents that confirm the qualifications listed for this role. A mismatch never rejects you automatically — a person reviews every case.",
+      "Upload PDF or DOCX documents whose contents address the published qualification requirement. A named reviewer checks the contents; this stage does not independently verify the issuer or authenticity.",
     researchRef: "R-IV.2",
   },
 
@@ -308,9 +299,9 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "verification",
     label: "Reference Check",
     methodName: "Structured reference check",
-    methodBasis: "Structured questionnaires reach ρ ≈ .26; unstructured calls predict almost nothing.",
-    validity: 0.26,
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "Standardized, job-related questions and an unable-to-observe option make referee evidence comparable; identity and response provenance still require verification.",
+    evidenceLevel: "method-family research",
     defaultMinutes: 5,
     description:
       "Structured referee questionnaires on the vacancy's own attributes, with fraud controls. Structure is what makes references worth anything.",
@@ -324,15 +315,14 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     group: "verification",
     label: "Human Interview Stage",
     methodName: "Structured panel interview",
-    methodBasis: "Structured-interview method (ρ ≈ .42): same BARS, independent ratings before discussion.",
-    validity: 0.42,
-    subgroupD: "d ≈ .2–.3",
-    evidenceLevel: "meta-analytic",
+    methodBasis:
+      "The panel uses the frozen job-related questions and BARS; reviewers rate independently before discussion and record evidence-backed reasons.",
+    evidenceLevel: "method-family research",
     defaultMinutes: 45,
     description:
-      "A live human round inside the same pipeline: auto-generated interview kits target AI-flagged weak spots, and panelists rate independently on the same BARS before discussing.",
+      "A live human round inside the same pipeline. Evidence-gap interview kits stay tied to the frozen criteria, and panelists rate independently on the same BARS before discussing.",
     candidateIntroTemplate:
-      "An interview with people from the team, using the same criteria as every earlier step. You book a time that works for you.",
+      "An interview with people from the team, using the same published criteria as every earlier step. The hiring team will provide the scheduling instructions for this stage.",
     researchRef: "R-I.2, R-III.4",
   },
 
@@ -342,7 +332,7 @@ export const BLOCK_LIBRARY: Record<BlockKind, BlockMeta> = {
     label: "Custom Block",
     methodName: "Author-defined instrument",
     methodBasis: "No validity evidence until locally validated — experimental by default.",
-    evidenceLevel: "experimental",
+    evidenceLevel: "local evidence required",
     defaultMinutes: 10,
     description:
       "An author-defined instrument built from raw primitives. Ships with an experimental evidence badge until you validate it locally.",
@@ -376,8 +366,7 @@ export function defaultSettings(kind: BlockKind): BlockSettings {
           { id: "fld-email", label: "Email", type: "short_text", required: true, pii: true, scored: false },
           { id: "fld-phone", label: "Phone number", type: "short_text", required: false, pii: true, scored: false },
         ],
-        prefillFromCv: true,
-        dedupeRule: "email_vacancy_resume",
+        prefillFromCv: false,
       };
     case "knockout":
       return { kind, items: [], placement: "before_form" };
@@ -386,9 +375,9 @@ export function defaultSettings(kind: BlockKind): BlockSettings {
         kind,
         acceptedFormats: ["pdf", "docx"],
         maxSizeMb: 10,
-        parseTargets: ["employment", "education", "certifications", "skills", "links"],
+        parseTargets: [],
         anonymizeForReview: true, // ON by default (R-I.6)
-        extractClaims: true,
+        extractClaims: false,
         portfolioUrlField: false,
       };
     case "async_interview":
@@ -397,9 +386,9 @@ export function defaultSettings(kind: BlockKind): BlockSettings {
         questions: [],
         followUpPolicy: 1,
         order: "fixed",
-        introVideo: "ai_presenter",
-        practiceQuestion: true, // non-removable — tech-check equity
-        pauseAllowance: 1,
+        introVideo: "none",
+        practiceQuestion: false,
+        pauseAllowance: 0,
         reviewBeforeSubmit: false, // off for video (spontaneity), on for text
       };
     case "live_ai_interview":
@@ -410,7 +399,7 @@ export function defaultSettings(kind: BlockKind): BlockSettings {
         questions: [],
         adaptivity: "probe_only",
         latencyFallback: "async",
-        bargeInAllowed: true,
+        bargeInAllowed: false,
       };
     case "chat_interview":
       return {
@@ -418,7 +407,7 @@ export function defaultSettings(kind: BlockKind): BlockSettings {
         questions: [],
         minAnswerWords: 30,
         maxAnswerWords: 200,
-        typingTelemetry: true,
+        typingTelemetry: false,
         pastePolicy: "warn",
         followUpPolicy: 1,
         tone: "neutral",
@@ -428,7 +417,7 @@ export function defaultSettings(kind: BlockKind): BlockSettings {
         kind,
         instruction: "behavioral_tendency", // lower cognitive loading by default (R-I.4)
         format: "pick_best",
-        keyType: "hybrid", // highest item validities (R-I.4)
+        keyType: "hybrid",
         items: [],
         timing: "untimed",
         randomizeOrder: false,
@@ -475,22 +464,22 @@ export function defaultSettings(kind: BlockKind): BlockSettings {
         timeModel: "honesty_window",
         timeBudgetHours: 2,
         aiPolicy: "disclosed",
-        originalityCheck: true,
+        originalityCheck: false,
         anonymizedGrading: true,
         rubricDimensions: [],
-        defenseFollowUp: true, // strongest anti-outsourcing measure (R-IV.4)
+        defenseFollowUp: false,
       };
     case "coding":
       return {
         kind,
         environment: "browser_ide",
         languages: [],
-        taskSource: "bank",
+        taskSource: "custom",
         brief: "",
         scoringSplit: { correctness: 50, quality: 30, approach: 20 },
         timeCapMin: 60,
         aiPolicy: "disclosed",
-        similarityCheck: true,
+        similarityCheck: false,
         rubricDimensions: [],
       };
     case "case_exercise":
@@ -499,8 +488,8 @@ export function defaultSettings(kind: BlockKind): BlockSettings {
       return {
         kind,
         requiredDocuments: [],
-        acceptedFormats: ["pdf", "jpg", "png"],
-        mode: "auto_extract_match",
+        acceptedFormats: ["pdf", "docx"],
+        mode: "manual_document_review",
         idCheck: false,
         placement: "post_shortlist", // reduce candidate burden by default (§4.4.16)
       };
@@ -517,10 +506,10 @@ export function defaultSettings(kind: BlockKind): BlockSettings {
       return {
         kind,
         panel: [],
-        selfBooking: true,
-        interviewKitAuto: true,
+        selfBooking: false,
+        interviewKitAuto: false,
         independentBeforeDiscussion: true, // R-I.2 #13
-        aiNotetaker: true, // consented; drafts a scorecard for the human to edit
+        aiNotetaker: false,
       };
     case "custom":
       return { kind, instructions: "", primitives: ["text"], rubricDimensions: [] };
@@ -578,7 +567,10 @@ export function estimateMinutes(block: PipelineBlock): number {
           (sum, q) => sum + (q.thinkTimeSec ?? 45) + q.answerCapSec + s.followUpPolicy * 45,
           0,
         );
-        minutes = perQuestionSec / 60 + 3; // + intro and mandatory practice question
+        minutes =
+          perQuestionSec / 60 +
+          (s.introVideo === "none" ? 0 : 1) +
+          (s.practiceQuestion ? 2 : 0);
       }
       break;
     case "live_ai_interview":

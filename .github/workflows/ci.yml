@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck, test, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck application and tests
+        run: npm exec -- tsc --noEmit
+
+      - name: Compile unit tests
+        run: npm exec -- tsc -p tests/tsconfig.json
+
+      - name: Run unit tests
+        run: node --test tests/dist/tests/*.test.js
+
+      - name: Verify retention state machine
+        run: npm run retention:verify
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  browser:
+    name: Candidate and HR browser journeys
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Start development server
+        run: npm run dev -- -p 3100 > /tmp/whitebox-next.log 2>&1 &
+        env:
+          WBX_DEMO_MODE: "true"
+
+      - name: Wait for readiness
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:3100/api/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/whitebox-next.log
+          exit 1
+
+      - name: Run browser journey
+        run: npm run test:e2e
+        env:
+          WBX_BASE_URL: http://127.0.0.1:3100
+          WBX_E2E_OUTPUT: ${{ runner.temp }}/whitebox-ai-e2e-screenshots
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-artifacts
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/whitebox-ai-e2e-screenshots
+            /tmp/whitebox-next.log
+          retention-days: 7
+
+  dependency-audit:
+    name: Production dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Audit locked production dependencies
+        run: npm audit --omit=dev --audit-level=high

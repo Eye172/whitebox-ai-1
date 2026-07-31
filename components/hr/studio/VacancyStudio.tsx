@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowDown, ArrowUp, Check, ChevronRight, CircleHelp, Copy,
   Eye, GripVertical, Library, Lock, Plus, RotateCcw, ShieldCheck,
-  Sparkles, Trash2, Users, WandSparkles, X,
+  Sparkles, Trash2, WandSparkles, X,
 } from "lucide-react";
 import { useStudio } from "./StudioProvider";
 import { BLOCK_GROUPS, BLOCK_LIBRARY, createBlock, estimateMinutes } from "@/lib/blocks";
@@ -13,11 +13,11 @@ import {
   coverageMatrix, distributeEqually, effectiveWeights, fmtMinutes, impactSummary,
   preflight, rebalanceWeights,
 } from "@/lib/studio";
-import { listVacancies, publishDraft } from "@/lib/store";
-import { draftQuestion } from "@/lib/ai";
+import BlockSettingsEditor from "./BlockSettingsEditor";
+import CriterionDetailEditor from "./CriterionDetailEditor";
 import type {
   AttributeKind, BlockKind, CategorySpec, EmploymentType, IndustryPack, PipelineBlock,
-  PositionProfile, Role, Seniority, VacancyV2, WorkMode,
+  InterviewQuestion, PositionProfile, Role, Seniority, VacancyV2, WorkMode,
 } from "@/lib/types";
 
 const STEPS = [
@@ -34,6 +34,29 @@ const INPUT = "iris-focus w-full rounded-lg border border-hairline bg-surface px
 const LABEL = "mb-1.5 block font-mono text-[10px] uppercase tracking-[.08em] text-lo";
 const CARD = "rounded-xl border border-hairline bg-surface";
 const BTN = "iris-focus rounded-lg border border-hairline px-3 py-2 text-[12px] text-mid hover:border-hairline-strong hover:text-hi";
+type AssessmentDesign = NonNullable<VacancyV2["assessmentDesign"]>;
+
+const DEFAULT_ASSESSMENT_DESIGN: AssessmentDesign = {
+  purpose: "selection",
+  jobAnalysis: {
+    method: "mixed",
+    sources: [],
+    criticalWorkOutputs: [],
+  },
+  validation: {
+    monitoringMode: "prelaunch_review",
+    outcomeCriteria: [],
+    reviewCadenceDays: 180,
+    minimumSampleForAnalysis: 100,
+    adverseImpactMonitoring: true,
+  },
+  decisionPolicy: {
+    humanFinalDecision: true,
+    allowAutomatedRejection: false,
+    requireReasonCode: true,
+    requireEvidenceCitation: true,
+  },
+};
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
@@ -43,15 +66,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="block"><span className={LABEL}>{label}</span>{children}</label>;
 }
 
-function Toggle({ checked, onChange, label, help }: {
-  checked: boolean; onChange: (v: boolean) => void; label: string; help?: string;
+function Toggle({ checked, onChange, label, help, disabled = false }: {
+  checked: boolean; onChange: (v: boolean) => void; label: string; help?: string; disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3">
+    <label className={`flex items-start gap-3 ${disabled ? "cursor-not-allowed opacity-65" : "cursor-pointer"}`}>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={`mt-0.5 h-5 w-9 rounded-full border p-0.5 transition-colors ${checked ? "border-irisb bg-irisb/20" : "border-hairline-strong bg-void2"}`}
       >
@@ -62,6 +86,49 @@ function Toggle({ checked, onChange, label, help }: {
         {help && <span className="mt-0.5 block text-[11px] leading-relaxed text-lo">{help}</span>}
       </span>
     </label>
+  );
+}
+
+function LinesField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  minHeight = "min-h-24",
+}: {
+  label: string;
+  value?: string[];
+  onChange: (value: string[]) => void;
+  placeholder?: string;
+  minHeight?: string;
+}) {
+  return (
+    <Field label={label}>
+      <textarea
+        className={`${INPUT} ${minHeight} leading-relaxed`}
+        value={(value ?? []).join("\n")}
+        onChange={(event) => onChange(event.target.value.split("\n"))}
+        onBlur={(event) => onChange(
+          event.target.value
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean),
+        )}
+        placeholder={placeholder}
+      />
+    </Field>
+  );
+}
+
+function AdvancedSummary({ title, text }: { title: string; text: string }) {
+  return (
+    <summary className="iris-focus flex cursor-pointer list-none items-center justify-between gap-4 rounded-lg px-1 py-1">
+      <span>
+        <span className="block text-[12px] font-medium text-hi">{title}</span>
+        <span className="mt-0.5 block text-[10px] leading-relaxed text-lo">{text}</span>
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-lo transition-transform group-open:rotate-90" />
+    </summary>
   );
 }
 
@@ -80,13 +147,35 @@ function Why({ text }: { text?: string }) {
 function Entry() {
   const { replace, setEntered, setStep } = useStudio();
   const [mode, setMode] = useState<"choose" | "describe" | "preset" | "clone">("choose");
-  const [title, setTitle] = useState("Product Manager — Marketplace");
-  const [description, setDescription] = useState(
-    "Ищем Product Manager для маркетплейса. Важны решения по данным, коммуникация со стейкхолдерами, эмпатия к клиенту и работа с конфликтующими приоритетами. Потенциал роста важнее формального стажа.",
-  );
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const clones = typeof window === "undefined" ? [] : listVacancies();
+  const [clones, setClones] = useState<VacancyV2[]>([]);
+  const [cloneLoadError, setCloneLoadError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/hr/vacancies", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not load vacancies.");
+        return response.json() as Promise<{ vacancies?: VacancyV2[] }>;
+      })
+      .then((body) => {
+        if (!cancelled) setClones(body.vacancies ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setClones([]);
+          setCloneLoadError(
+            "Saved vacancies could not be loaded from the server. Reload and try again.",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const enter = (draft: VacancyV2) => {
     replace(draft);
@@ -124,15 +213,15 @@ function Entry() {
             WhiteBox drafts the profile, weighted criteria and initial pipeline. Every recommendation stays editable and carries a “why”.
           </p>
           <div className="mt-6 space-y-4">
-            <Field label="Position title"><input className={INPUT} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
+            <Field label="Position title"><input className={INPUT} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="For example: Head of Platform Reliability" /></Field>
             <Field label="Role description">
-              <textarea className={`${INPUT} min-h-40 leading-relaxed`} value={description} onChange={(e) => setDescription(e.target.value)} />
+              <textarea className={`${INPUT} min-h-40 leading-relaxed`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the real work, critical outcomes, constraints, stakeholders, minimum qualifications and what distinguishes strong performance." />
             </Field>
           </div>
           {error && <p className="mt-3 text-[12px] text-neg">{error}</p>}
           <button
             onClick={generate}
-            disabled={busy || description.trim().length < 20}
+            disabled={busy || title.trim().length < 2 || description.trim().length < 20}
             className="mt-5 inline-flex items-center gap-2 rounded-lg bg-paper px-4 py-2.5 text-[13px] font-medium text-void disabled:opacity-40"
           >
             <WandSparkles className="size-4" />{busy ? "Building the transparent chain…" : "Draft vacancy"}
@@ -146,7 +235,7 @@ function Entry() {
     return (
       <div className="mx-auto max-w-5xl px-8 py-12">
         <button className={BTN} onClick={() => setMode("choose")}>← Entry modes</button>
-        <h1 className="mt-5 font-display text-[27px]">Start from a validated role-family preset.</h1>
+        <h1 className="mt-5 font-display text-[27px]">Start from a reviewable role-family template.</h1>
         <div className="mt-6 grid grid-cols-3 gap-4">
           {BUILT_IN_PRESETS.map((preset) => (
             <button key={preset.id} onClick={() => enter(instantiatePreset(preset))} className={`${CARD} brackets p-5 text-left`}>
@@ -167,7 +256,8 @@ function Entry() {
         <button className={BTN} onClick={() => setMode("choose")}>← Entry modes</button>
         <h1 className="mt-5 font-display text-[27px]">Clone an existing vacancy.</h1>
         <div className="mt-6 space-y-3">
-          {clones.length === 0 && <div className={`${CARD} p-6 text-[13px] text-mid`}>No locally published vacancies yet. Start from a built-in preset instead.</div>}
+          {cloneLoadError && <div role="alert" className={`${CARD} border-neg/30 p-6 text-[13px] text-neg`}>{cloneLoadError}</div>}
+          {!cloneLoadError && clones.length === 0 && <div className={`${CARD} p-6 text-[13px] text-mid`}>No published vacancies are available to clone.</div>}
           {clones.map((v) => (
             <button
               key={v.id}
@@ -217,7 +307,35 @@ function Entry() {
 function ProfileStep() {
   const { draft, update } = useStudio();
   const p = draft.profile;
+  const design = draft.assessmentDesign ?? DEFAULT_ASSESSMENT_DESIGN;
   const patch = (next: Partial<PositionProfile>) => update((d) => ({ ...d, profile: { ...d.profile, ...next } }));
+  const patchDesign = (next: Partial<AssessmentDesign>) => update((d) => ({
+    ...d,
+    assessmentDesign: {
+      ...(d.assessmentDesign ?? DEFAULT_ASSESSMENT_DESIGN),
+      ...next,
+    },
+  }));
+  const patchJobAnalysis = (next: Partial<AssessmentDesign["jobAnalysis"]>) => update((d) => {
+    const current = d.assessmentDesign ?? DEFAULT_ASSESSMENT_DESIGN;
+    return {
+      ...d,
+      assessmentDesign: {
+        ...current,
+        jobAnalysis: { ...current.jobAnalysis, ...next },
+      },
+    };
+  });
+  const patchValidation = (next: Partial<AssessmentDesign["validation"]>) => update((d) => {
+    const current = d.assessmentDesign ?? DEFAULT_ASSESSMENT_DESIGN;
+    return {
+      ...d,
+      assessmentDesign: {
+        ...current,
+        validation: { ...current.validation, ...next },
+      },
+    };
+  });
   return (
     <section>
       <StepHeading eyebrow="01 · Position Profile" title="Define the concrete workplace." text="This context seeds criteria, question banks, candidate copy and evaluation prompts." />
@@ -266,6 +384,177 @@ function ProfileStep() {
           </div>
         </div>
       </div>
+      <details
+        className={`${CARD} group mt-4 p-5`}
+        onToggle={(event) => {
+          if (event.currentTarget.open && !draft.assessmentDesign) patchDesign({});
+        }}
+      >
+        <AdvancedSummary
+          title="Advanced role evidence design"
+          text="Job analysis, success outcomes, operating context and the local validation plan."
+        />
+        <div className="mt-5 space-y-6 border-t border-hairline pt-5">
+          <div>
+            <div className="hud-label">Role context · what strong performance must produce</div>
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <LinesField
+                label="Success outcomes · one per line"
+                value={p.successOutcomes}
+                onChange={(successOutcomes) => patch({ successOutcomes })}
+                placeholder="A measurable result expected after 3–12 months"
+              />
+              <LinesField
+                label="Operating constraints · one per line"
+                value={p.operatingConstraints}
+                onChange={(operatingConstraints) => patch({ operatingConstraints })}
+                placeholder="Regulation, budget, shift, legacy-system or safety constraints"
+              />
+              <LinesField
+                label="Stakeholder groups · one per line"
+                value={p.stakeholderGroups}
+                onChange={(stakeholderGroups) => patch({ stakeholderGroups })}
+                placeholder="Customers, regulators, engineering, operations…"
+              />
+              <LinesField
+                label="Special requirements · one per line"
+                value={p.specialRequirements}
+                onChange={(specialRequirements) => patch({ specialRequirements })}
+                placeholder="Only requirements demonstrably connected to the work"
+              />
+              <LinesField
+                label="Internal comments · never candidate-facing"
+                value={p.internalComments}
+                onChange={(internalComments) => patch({ internalComments })}
+                placeholder="Context for the hiring team; do not include protected information"
+              />
+              <Field label="Internal tags · comma-separated">
+                <input
+                  className={INPUT}
+                  value={(p.tags ?? []).join(", ")}
+                  onChange={(event) => patch({ tags: event.target.value.split(",").map((item) => item.trimStart()) })}
+                  onBlur={(event) => patch({
+                    tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean),
+                  })}
+                  placeholder="critical-hire, regulated, leadership"
+                />
+              </Field>
+            </div>
+          </div>
+          <div className="border-t border-hairline pt-5">
+            <div className="hud-label">Job analysis · source of the assessment blueprint</div>
+            <div className="mt-4 grid grid-cols-3 gap-4">
+              <Field label="Assessment purpose">
+                <select
+                  className={INPUT}
+                  value={design.purpose}
+                  onChange={(event) => patchDesign({ purpose: event.target.value as AssessmentDesign["purpose"] })}
+                >
+                  <option value="selection">Selection</option>
+                  <option value="screening">Screening</option>
+                  <option value="internal_mobility">Internal mobility</option>
+                  <option value="development">Development</option>
+                </select>
+              </Field>
+              <Field label="Job-analysis method">
+                <select
+                  className={INPUT}
+                  value={design.jobAnalysis.method}
+                  onChange={(event) => patchJobAnalysis({ method: event.target.value as AssessmentDesign["jobAnalysis"]["method"] })}
+                >
+                  <option value="mixed">Mixed evidence</option>
+                  <option value="structured_workshop">Structured SME workshop</option>
+                  <option value="critical_incidents">Critical incidents</option>
+                  <option value="task_inventory">Task inventory</option>
+                  <option value="competency_model">Competency model</option>
+                </select>
+              </Field>
+              <Field label="Approved by">
+                <input
+                  className={INPUT}
+                  value={design.jobAnalysis.approvedBy ?? ""}
+                  onChange={(event) => patchJobAnalysis({ approvedBy: event.target.value || undefined })}
+                  placeholder="Name and role"
+                />
+              </Field>
+              <div className="col-span-2">
+                <LinesField
+                  label="Evidence sources · one per line"
+                  value={design.jobAnalysis.sources}
+                  onChange={(sources) => patchJobAnalysis({ sources })}
+                  placeholder="SME workshop 2026-07-10; task inventory v3; incident review…"
+                />
+              </div>
+              <Field label="Approval date">
+                <input
+                  className={INPUT}
+                  type="datetime-local"
+                  value={design.jobAnalysis.approvedAt?.slice(0, 16) ?? ""}
+                  onChange={(event) => patchJobAnalysis({ approvedAt: event.target.value || undefined })}
+                />
+              </Field>
+              <div className="col-span-3">
+                <LinesField
+                  label="Critical work outputs · one per line"
+                  value={design.jobAnalysis.criticalWorkOutputs}
+                  onChange={(criticalWorkOutputs) => patchJobAnalysis({ criticalWorkOutputs })}
+                  placeholder="Concrete work products or decisions that the role must deliver"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-hairline pt-5">
+            <div className="hud-label">Local validation & monitoring</div>
+            <div className="mt-4 grid grid-cols-3 gap-4">
+              <Field label="Monitoring phase">
+                <select
+                  className={INPUT}
+                  value={design.validation.monitoringMode}
+                  onChange={(event) => patchValidation({ monitoringMode: event.target.value as AssessmentDesign["validation"]["monitoringMode"] })}
+                >
+                  <option value="prelaunch_review">Prelaunch review</option>
+                  <option value="pilot">Pilot</option>
+                  <option value="operational">Operational</option>
+                </select>
+              </Field>
+              <Field label="Review cadence · days">
+                <input
+                  className={INPUT}
+                  type="number"
+                  min={1}
+                  value={design.validation.reviewCadenceDays}
+                  onChange={(event) => patchValidation({ reviewCadenceDays: Number(event.target.value) })}
+                />
+              </Field>
+              <Field label="Minimum sample for analysis">
+                <input
+                  className={INPUT}
+                  type="number"
+                  min={1}
+                  value={design.validation.minimumSampleForAnalysis}
+                  onChange={(event) => patchValidation({ minimumSampleForAnalysis: Number(event.target.value) })}
+                />
+              </Field>
+              <div className="col-span-2">
+                <LinesField
+                  label="Outcome criteria · one per line"
+                  value={design.validation.outcomeCriteria}
+                  onChange={(outcomeCriteria) => patchValidation({ outcomeCriteria })}
+                  placeholder="90-day quality metric; manager BARS; retention milestone…"
+                />
+              </div>
+              <div className="pt-5">
+                <Toggle
+                  checked={design.validation.adverseImpactMonitoring}
+                  onChange={(adverseImpactMonitoring) => patchValidation({ adverseImpactMonitoring })}
+                  label="Monitor selection-rate differences"
+                  help="Review outcomes by legally permissible groups and investigate material differences."
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
     </section>
   );
 }
@@ -273,14 +562,28 @@ function ProfileStep() {
 function CriteriaStep() {
   const { draft, update } = useStudio();
   const [busy, setBusy] = useState(false);
+  const [suggestError, setSuggestError] = useState("");
   const [locked, setLocked] = useState<Set<string>>(new Set());
   const coverage = coverageMatrix(draft);
   const suggest = async () => {
     setBusy(true);
-    const res = await fetch("/api/ai/suggest-criteria", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ profile: draft.profile }) });
-    const body = await res.json();
-    if (res.ok) update((d) => ({ ...d, categories: body.categories as CategorySpec[] }));
-    setBusy(false);
+    setSuggestError("");
+    try {
+      const res = await fetch("/api/ai/suggest-criteria", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ profile: draft.profile }) });
+      const body = (await res.json()) as { categories?: CategorySpec[]; error?: string };
+      if (!res.ok || !body.categories) {
+        throw new Error(body.error || "The criteria service returned an incomplete result.");
+      }
+      update((d) => ({ ...d, categories: body.categories ?? d.categories }));
+    } catch (error) {
+      setSuggestError(
+        error instanceof Error
+          ? error.message
+          : "Criteria could not be generated.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
   const setCategoryWeight = (id: string, weight: number) => update((d) => ({ ...d, categories: rebalanceWeights(d.categories, id, weight, locked) }));
   const setAttrWeight = (catId: string, attrId: string, weight: number) => update((d) => ({
@@ -293,6 +596,7 @@ function CriteriaStep() {
       <StepHeading eyebrow="02 · Criteria Architecture" title="Define what “good” means." text="Weights sum to 100 at both levels. Knockouts stay separate from scored criteria." action={
         <button className={`${BTN} inline-flex items-center gap-2`} onClick={suggest} disabled={busy || !draft.profile.title}><Sparkles className="size-3.5" />{busy ? "Drafting…" : "Suggest attributes"}</button>
       } />
+      {suggestError && <p role="alert" className="mb-4 rounded-lg border border-neg/30 bg-neg/10 p-3 text-[11px] text-neg">{suggestError}</p>}
       {draft.categories.length === 0 && <div className={`${CARD} p-10 text-center text-[13px] text-mid`}>Start with “Suggest attributes” or add a category manually.</div>}
       <div className="space-y-4">
         {draft.categories.map((cat) => (
@@ -302,32 +606,72 @@ function CriteriaStep() {
               <Why text={cat.rationale} />
               <input type="range" min={0} max={100} className="w-28 accent-[var(--iris-b)]" value={cat.weight} onChange={(e) => setCategoryWeight(cat.id, Number(e.target.value))} />
               <input className="w-14 rounded border border-hairline bg-void2 px-2 py-1 text-right font-mono text-[11px]" type="number" value={cat.weight} onChange={(e) => setCategoryWeight(cat.id, Number(e.target.value))} />
-              <button onClick={() => setLocked((s) => { const n = new Set(s); n.has(cat.id) ? n.delete(cat.id) : n.add(cat.id); return n; })}><Lock className={`size-3.5 ${locked.has(cat.id) ? "text-irisb" : "text-lo"}`} /></button>
+              <button onClick={() => setLocked((s) => { const n = new Set(s); if (n.has(cat.id)) n.delete(cat.id); else n.add(cat.id); return n; })}><Lock className={`size-3.5 ${locked.has(cat.id) ? "text-irisb" : "text-lo"}`} /></button>
               <button onClick={() => update((d) => ({ ...d, categories: distributeEqually(d.categories) }))} className="font-mono text-[9px] text-lo">EQUAL</button>
             </div>
             <div className="divide-y divide-hairline">
               {cat.attributes.map((attr) => {
                 const cell = coverage.find((x) => x.attributeId === attr.id);
                 return (
-                  <div key={attr.id} className="grid grid-cols-[1fr_108px_120px_56px_72px_28px] items-center gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <input className="min-w-0 flex-1 bg-transparent text-[13px] text-hi outline-none" value={attr.name} onChange={(e) => update((d) => ({ ...d, categories: d.categories.map((c) => c.id === cat.id ? { ...c, attributes: c.attributes.map((a) => a.id === attr.id ? { ...a, name: e.target.value } : a) } : c) }))} />
-                        <Why text={attr.rationale} />
+                  <div key={attr.id}>
+                    <div className="grid grid-cols-[1fr_108px_120px_56px_72px_28px] items-center gap-3 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <input className="min-w-0 flex-1 bg-transparent text-[13px] text-hi outline-none" value={attr.name} onChange={(e) => update((d) => ({ ...d, categories: d.categories.map((c) => c.id === cat.id ? { ...c, attributes: c.attributes.map((a) => a.id === attr.id ? { ...a, name: e.target.value } : a) } : c) }))} />
+                          <Why text={attr.rationale} />
+                        </div>
+                        <input className="mt-1 w-full bg-transparent text-[11px] text-lo outline-none" value={attr.definition} onChange={(e) => update((d) => ({ ...d, categories: d.categories.map((c) => c.id === cat.id ? { ...c, attributes: c.attributes.map((a) => a.id === attr.id ? { ...a, definition: e.target.value } : a) } : c) }))} />
                       </div>
-                      <input className="mt-1 w-full bg-transparent text-[11px] text-lo outline-none" value={attr.definition} onChange={(e) => update((d) => ({ ...d, categories: d.categories.map((c) => c.id === cat.id ? { ...c, attributes: c.attributes.map((a) => a.id === attr.id ? { ...a, definition: e.target.value } : a) } : c) }))} />
+                      <select className={`${INPUT} py-1.5`} value={attr.kind} onChange={(e) => update((d) => ({ ...d, categories: d.categories.map((c) => c.id === cat.id ? { ...c, attributes: c.attributes.map((a) => a.id === attr.id ? { ...a, kind: e.target.value as AttributeKind } : a) } : c) }))}>
+                        {["skill", "trait", "knowledge", "qualification", "experience", "language"].map((x) => <option key={x}>{x}</option>)}
+                      </select>
+                      <input type="range" className="accent-[var(--iris-b)]" min={0} max={100} value={attr.weight} onChange={(e) => setAttrWeight(cat.id, attr.id, Number(e.target.value))} />
+                      <input className="rounded border border-hairline bg-void2 px-2 py-1 text-right font-mono text-[11px]" type="number" value={attr.weight} onChange={(e) => setAttrWeight(cat.id, attr.id, Number(e.target.value))} />
+                      <button
+                        disabled={!attr.focus && focusCount >= 5}
+                        onClick={() => update((d) => ({ ...d, categories: d.categories.map((c) => c.id === cat.id ? { ...c, attributes: c.attributes.map((a) => a.id === attr.id ? { ...a, focus: !a.focus || undefined } : a) } : c) }))}
+                        className={`rounded-full border px-2 py-1 font-mono text-[9px] ${attr.focus ? "border-irisb/50 text-irisc" : "border-hairline text-lo"}`}
+                      >FOCUS</button>
+                      <span
+                        title={
+                          cell?.ok
+                            ? `Coverage complete · ${cell.blockIds.length}/${cell.requiredSources} sources`
+                            : `Needs ${cell?.requiredSources ?? 1} independent scored source(s)`
+                        }
+                        className={`size-2 rounded-full ${cell?.ok ? "bg-pos" : "bg-warn"}`}
+                      />
                     </div>
-                    <select className={`${INPUT} py-1.5`} value={attr.kind} onChange={(e) => update((d) => ({ ...d, categories: d.categories.map((c) => c.id === cat.id ? { ...c, attributes: c.attributes.map((a) => a.id === attr.id ? { ...a, kind: e.target.value as AttributeKind } : a) } : c) }))}>
-                      {["skill", "trait", "knowledge", "qualification", "experience", "language"].map((x) => <option key={x}>{x}</option>)}
-                    </select>
-                    <input type="range" className="accent-[var(--iris-b)]" min={0} max={100} value={attr.weight} onChange={(e) => setAttrWeight(cat.id, attr.id, Number(e.target.value))} />
-                    <input className="rounded border border-hairline bg-void2 px-2 py-1 text-right font-mono text-[11px]" type="number" value={attr.weight} onChange={(e) => setAttrWeight(cat.id, attr.id, Number(e.target.value))} />
-                    <button
-                      disabled={!attr.focus && focusCount >= 5}
-                      onClick={() => update((d) => ({ ...d, categories: d.categories.map((c) => c.id === cat.id ? { ...c, attributes: c.attributes.map((a) => a.id === attr.id ? { ...a, focus: !a.focus || undefined } : a) } : c) }))}
-                      className={`rounded-full border px-2 py-1 font-mono text-[9px] ${attr.focus ? "border-irisb/50 text-irisc" : "border-hairline text-lo"}`}
-                    >FOCUS</button>
-                    <span title={cell?.ok ? "Coverage complete" : "Needs pipeline coverage"} className={`size-2 rounded-full ${cell?.ok ? "bg-pos" : "bg-warn"}`} />
+                    <CriterionDetailEditor
+                      attribute={attr}
+                      onChange={(nextAttribute) => update((d) => ({
+                        ...d,
+                        categories: d.categories.map((category) =>
+                          category.id === cat.id
+                            ? {
+                                ...category,
+                                attributes: category.attributes.map((item) =>
+                                  item.id === attr.id ? nextAttribute : item,
+                                ),
+                              }
+                            : category,
+                        ),
+                      }))}
+                      onDelete={() => update((d) => ({
+                        ...d,
+                        categories: d.categories.map((category) =>
+                          category.id === cat.id
+                            ? {
+                                ...category,
+                                attributes: distributeEqually(
+                                  category.attributes.filter(
+                                    (item) => item.id !== attr.id,
+                                  ),
+                                ),
+                              }
+                            : category,
+                        ),
+                      }))}
+                    />
                   </div>
                 );
               })}
@@ -345,15 +689,64 @@ function PipelineStep() {
   const { draft, update } = useStudio();
   const [library, setLibrary] = useState(false);
   const [expandedBlock, setExpandedBlock] = useState<string | null>(null);
+  const [generatingKind, setGeneratingKind] = useState<BlockKind | null>(null);
+  const [generationError, setGenerationError] = useState("");
   const attrs = draft.categories.flatMap((c) => c.attributes);
-  const add = (kind: BlockKind) => {
+  const add = async (kind: BlockKind) => {
     const block = createBlock(kind, draft.pipeline.length);
-    if (block.scored && attrs.length) {
-      block.measures = distributeEqually(attrs.map((a) => ({ id: a.id, attributeId: a.id, weight: 0 }))).map((x) => ({ attributeId: x.attributeId, share: x.weight }));
+    const isInterview = [
+      "async_interview",
+      "live_ai_interview",
+      "chat_interview",
+    ].includes(kind);
+    const measuredAttributes = isInterview ? attrs.slice(0, 12) : attrs;
+    if (block.scored && measuredAttributes.length) {
+      block.measures = distributeEqually(measuredAttributes.map((a) => ({ id: a.id, attributeId: a.id, weight: 0 }))).map((x) => ({ attributeId: x.attributeId, share: x.weight }));
     }
-    if (["async_interview", "live_ai_interview", "chat_interview"].includes(kind) && "questions" in block.settings) {
-      block.settings.questions = attrs.slice(0, 5).map((a) => draftQuestion(a, draft.profile.seniority === "Junior" ? "situational" : "behavioral", draft.profile.seniority));
-      block.estimatedMinutes = estimateMinutes(block);
+    if (isInterview && "questions" in block.settings) {
+      setGeneratingKind(kind);
+      setGenerationError("");
+      try {
+        const questions = await Promise.all(
+          measuredAttributes.map(async (attribute) => {
+            const response = await fetch("/api/ai/draft-question", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                attribute,
+                type:
+                  draft.profile.seniority === "Junior"
+                    ? "situational"
+                    : attribute.kind === "knowledge"
+                      ? "job_knowledge"
+                      : "behavioral",
+                seniority: draft.profile.seniority,
+              }),
+            });
+            const body = (await response.json()) as {
+              error?: string;
+              question?: InterviewQuestion;
+            };
+            if (!response.ok || !body.question) {
+              throw new Error(
+                body.error || "The real AI provider did not return a question.",
+              );
+            }
+            return body.question;
+          }),
+        );
+        block.settings.questions = questions;
+        block.estimatedMinutes = estimateMinutes(block);
+      } catch (error) {
+        setGenerationError(
+          error instanceof Error
+            ? error.message
+            : "The real AI provider could not generate this interview block.",
+        );
+        return;
+      } finally {
+        setGeneratingKind(null);
+      }
     }
     update((d) => ({ ...d, pipeline: [...d.pipeline, block] }));
     setExpandedBlock(block.id);
@@ -369,12 +762,24 @@ function PipelineStep() {
   });
   return (
     <section>
-      <StepHeading eyebrow="03 · Pipeline Composer" title="Compose named selection methods." text="Each block declares its evidence basis, time cost and adverse-impact profile." action={<button onClick={() => setLibrary(true)} className="inline-flex items-center gap-2 rounded-lg bg-paper px-3 py-2 text-[12px] text-void"><Plus className="size-3.5" /> Add block</button>} />
+      <StepHeading eyebrow="03 · Pipeline Composer" title="Compose named selection methods." text="Each block declares what it collects, how it is reviewed, its candidate burden and the validation evidence required for this role." action={<button onClick={() => setLibrary(true)} className="inline-flex items-center gap-2 rounded-lg bg-paper px-3 py-2 text-[12px] text-void"><Plus className="size-3.5" /> Add block</button>} />
       <div className="space-y-3">
         {draft.pipeline.length === 0 && <button onClick={() => setLibrary(true)} className={`${CARD} w-full border-dashed p-12 text-center text-[13px] text-mid`}>Open the 19-method Block Library</button>}
         {draft.pipeline.map((block, index) => {
           const meta = BLOCK_LIBRARY[block.kind];
           const expanded = expandedBlock === block.id;
+          const validation: NonNullable<PipelineBlock["validation"]> = block.validation ?? {
+            strategy: "content",
+            status: "draft",
+            scoreUse: block.scored ? "decision_support" : "context_only",
+            evidenceRefs: [],
+          };
+          const patchGate = (patch: Partial<NonNullable<PipelineBlock["gate"]>>) => {
+            const next = { ...block.gate, ...patch };
+            const hasMinimum = typeof next.minBlockScore === "number";
+            const hasMustHaves = (next.mustHaveIds?.length ?? 0) > 0;
+            mutateBlock(block.id, { gate: hasMinimum || hasMustHaves ? next : undefined });
+          };
           return (
             <div key={block.id}>
               <div className={`${CARD} overflow-hidden`}>
@@ -399,50 +804,313 @@ function PipelineStep() {
                     <button className={BTN} onClick={() => { setExpandedBlock((current) => current === block.id ? null : current); update((d) => ({ ...d, pipeline: d.pipeline.filter((b) => b.id !== block.id).map((b, i) => ({ ...b, order: i })) })); }} aria-label={`Delete ${block.title}`}><Trash2 className="size-3.5" /></button>
                   </div>
                 </div>
-                {expanded && <div className="grid grid-cols-[1.25fr_.75fr] gap-5 p-4">
-                  <div>
-                    <div className="mb-4 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-hairline px-2 py-0.5 font-mono text-[9px] text-lo">{meta.evidenceLevel}</span>
-                      {meta.validity && <span className="font-mono text-[9px] text-pos">ρ ≈ {meta.validity.toFixed(2)}</span>}
-                      {meta.subgroupD && <span className="font-mono text-[9px] text-warn">{meta.subgroupD}</span>}
+                {expanded && <div className="p-4">
+                  <div className="grid grid-cols-[1.25fr_.75fr] gap-5">
+                    <div>
+                      <div className="mb-4 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-hairline px-2 py-0.5 font-mono text-[9px] text-lo">
+                          EVIDENCE BASIS · {meta.evidenceLevel}
+                        </span>
+                        <span className="font-mono text-[9px] text-warn">
+                          LOCAL VALIDATION STILL REQUIRED
+                        </span>
+                      </div>
+                      <Field label="Candidate instructions">
+                        <textarea className={`${INPUT} min-h-24 leading-relaxed`} value={block.candidateIntro} onChange={(e) => mutateBlock(block.id, { candidateIntro: e.target.value })} />
+                      </Field>
+                      {block.scored && (
+                        <div className="mt-4">
+                          <span className={LABEL}>Attribute mapping · click to include</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {attrs.map((attr) => {
+                              const active = block.measures.some((m) => m.attributeId === attr.id);
+                              return (
+                                <button
+                                  key={attr.id}
+                                  onClick={() => {
+                                    const ids = active ? block.measures.filter((m) => m.attributeId !== attr.id).map((m) => m.attributeId) : [...block.measures.map((m) => m.attributeId), attr.id];
+                                    const measures = distributeEqually(ids.map((id) => ({ id, weight: 0 }))).map((x) => ({ attributeId: x.id, share: x.weight }));
+                                    mutateBlock(block.id, { measures });
+                                  }}
+                                  className={`rounded-full border px-2.5 py-1 text-[10px] ${active ? "border-irisb/50 bg-irisb/10 text-irisc" : "border-hairline text-lo"}`}
+                                >{attr.focus ? "◉ " : ""}{attr.name}</button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <Field label="Candidate instructions">
-                      <textarea className={`${INPUT} min-h-24 leading-relaxed`} value={block.candidateIntro} onChange={(e) => mutateBlock(block.id, { candidateIntro: e.target.value })} />
-                    </Field>
-                    {block.scored && (
-                      <div className="mt-4">
-                        <span className={LABEL}>Attribute mapping · click to include</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {attrs.map((attr) => {
-                            const active = block.measures.some((m) => m.attributeId === attr.id);
-                            return (
-                              <button
-                                key={attr.id}
-                                onClick={() => {
-                                  const ids = active ? block.measures.filter((m) => m.attributeId !== attr.id).map((m) => m.attributeId) : [...block.measures.map((m) => m.attributeId), attr.id];
-                                  const measures = distributeEqually(ids.map((id) => ({ id, weight: 0 }))).map((x) => ({ attributeId: x.id, share: x.weight }));
-                                  mutateBlock(block.id, { measures });
-                                }}
-                                className={`rounded-full border px-2.5 py-1 text-[10px] ${active ? "border-irisb/50 bg-irisb/10 text-irisc" : "border-hairline text-lo"}`}
-                              >{attr.focus ? "◉ " : ""}{attr.name}</button>
-                            );
+                    <div className="grid grid-cols-2 content-start gap-3">
+                      <Toggle checked={block.required} onChange={(required) => mutateBlock(block.id, { required })} label="Required" />
+                      <Toggle checked={block.scored} onChange={(scored) => mutateBlock(block.id, { scored })} label="Scored" />
+                      <Field label="Integrity tier">
+                        <select className={`${INPUT} py-2`} value={block.integrityTier} onChange={(e) => mutateBlock(block.id, { integrityTier: Number(e.target.value) as 0 | 1 | 2 | 3 })}>
+                          <option value={0}>0 · no browser signals</option>
+                          <option value={1}>1 · disclosed interaction events</option>
+                          {block.integrityTier >= 2 && (
+                            <option value={block.integrityTier} disabled>
+                              Legacy tier {block.integrityTier} · replace before publishing
+                            </option>
+                          )}
+                        </select>
+                      </Field>
+                      <Field label="Retakes"><select className={`${INPUT} py-2`} value={block.retakePolicy} onChange={(e) => mutateBlock(block.id, { retakePolicy: Number(e.target.value) as 0 | 1 | 2 })}><option value={0}>0</option><option value={1}>1</option><option value={2}>2</option></select></Field>
+                      <div><span className={LABEL}>Candidate time</span><div className="rounded-lg border border-hairline bg-void2 px-3 py-2 text-[12px] text-mid">{fmtMinutes(estimateMinutes(block))}</div></div>
+                    </div>
+                  </div>
+                  <div className="mt-5 rounded-xl border border-hairline bg-surface2/45 p-4">
+                    <div className="mb-4 flex items-start justify-between gap-4">
+                      <div>
+                        <div className="hud-label">Method settings · {meta.methodName}</div>
+                        <p className="mt-1 max-w-3xl text-[10px] leading-relaxed text-lo">{meta.methodBasis}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full border border-hairline px-2 py-1 font-mono text-[9px] text-lo">{block.settings.kind}</span>
+                    </div>
+                    <BlockSettingsEditor
+                      block={block}
+                      attributes={attrs}
+                      onChange={(settings) => mutateBlock(block.id, { settings })}
+                    />
+                  </div>
+                  <details
+                    className="group mt-4 rounded-xl border border-hairline bg-surface2/45 p-4"
+                    onToggle={(event) => {
+                      if (!event.currentTarget.open) return;
+                      if (!block.validation || !block.evidenceRole) {
+                        mutateBlock(block.id, {
+                          validation,
+                          evidenceRole: block.evidenceRole ?? (block.scored ? "primary" : "context"),
+                        });
+                      }
+                    }}
+                  >
+                    <AdvancedSummary
+                      title="Advanced delivery, evidence & validation"
+                      text="Candidate accommodations, deadlines, hurdle logic, assessor guidance and permitted score use."
+                    />
+                    <div className="mt-4 space-y-5 border-t border-hairline pt-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        <Field label="Evidence role">
+                          <select
+                            className={INPUT}
+                            value={block.evidenceRole ?? (block.scored ? "primary" : "context")}
+                            onChange={(event) => mutateBlock(block.id, { evidenceRole: event.target.value as NonNullable<PipelineBlock["evidenceRole"]> })}
+                          >
+                            <option value="primary">Primary evidence</option>
+                            <option value="corroborating">Corroborating</option>
+                            <option value="verification">Verification</option>
+                            <option value="context">Context only</option>
+                          </select>
+                        </Field>
+                        <Field label="Language override">
+                          <input
+                            className={INPUT}
+                            value={block.languageOverride ?? ""}
+                            onChange={(event) => mutateBlock(block.id, { languageOverride: event.target.value || undefined })}
+                            placeholder={draft.profile.languages.primary || "Use vacancy language"}
+                          />
+                        </Field>
+                        <Field label="Deadline after invitation · hours">
+                          <input
+                            className={INPUT}
+                            type="number"
+                            min={1}
+                            value={block.deadlineOffsetHours ?? ""}
+                            onChange={(event) => mutateBlock(block.id, {
+                              deadlineOffsetHours: event.target.value ? Number(event.target.value) : undefined,
+                            })}
+                            placeholder="No block-specific deadline"
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Field label="Assessor instructions · internal">
+                          <textarea
+                            className={`${INPUT} min-h-28 leading-relaxed`}
+                            value={block.assessorInstructions ?? ""}
+                            onChange={(event) => mutateBlock(block.id, { assessorInstructions: event.target.value || undefined })}
+                            placeholder="What evidence to seek, how to apply the rubric and when to abstain."
+                          />
+                        </Field>
+                        <LinesField
+                          label="Internal notes · one per line"
+                          value={block.internalNotes}
+                          onChange={(internalNotes) => mutateBlock(block.id, { internalNotes })}
+                          placeholder="Operational notes that are never candidate-facing"
+                          minHeight="min-h-28"
+                        />
+                      </div>
+                      <Field label="Block tags · comma-separated">
+                        <input
+                          className={INPUT}
+                          value={(block.tags ?? []).join(", ")}
+                          onChange={(event) => mutateBlock(block.id, { tags: event.target.value.split(",").map((item) => item.trimStart()) })}
+                          onBlur={(event) => mutateBlock(block.id, {
+                            tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean),
                           })}
+                          placeholder="high-signal, regulated, specialist-review"
+                        />
+                      </Field>
+                      <div className="border-t border-hairline pt-4">
+                        <div className="hud-label">Accessibility & delivery</div>
+                        <div className="mt-4 grid grid-cols-4 gap-4">
+                          <Field label="Extra time">
+                            <select
+                              className={INPUT}
+                              value={String(block.accessibility.extraTimeMultiplier)}
+                              onChange={(event) => mutateBlock(block.id, {
+                                accessibility: {
+                                  ...block.accessibility,
+                                  extraTimeMultiplier: event.target.value === "untimed"
+                                    ? "untimed"
+                                    : Number(event.target.value) as 1 | 1.25 | 1.5 | 2,
+                                },
+                              })}
+                            >
+                              <option value="1">Standard</option>
+                              <option value="1.25">1.25×</option>
+                              <option value="1.5">1.5×</option>
+                              <option value="2">2×</option>
+                              <option value="untimed">Untimed</option>
+                            </select>
+                          </Field>
+                          <Toggle
+                            checked={block.accessibility.captions}
+                            onChange={(captions) => mutateBlock(block.id, { accessibility: { ...block.accessibility, captions } })}
+                            label="Captions"
+                          />
+                          <Toggle
+                            checked={block.accessibility.screenReaderMode}
+                            onChange={(screenReaderMode) => mutateBlock(block.id, { accessibility: { ...block.accessibility, screenReaderMode } })}
+                            label="Screen-reader mode"
+                          />
+                          <Toggle
+                            checked={block.accessibility.alternativeFormats}
+                            onChange={(alternativeFormats) => mutateBlock(block.id, { accessibility: { ...block.accessibility, alternativeFormats } })}
+                            label="Alternative formats"
+                          />
                         </div>
                       </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 content-start gap-3">
-                    <Toggle checked={block.required} onChange={(required) => mutateBlock(block.id, { required })} label="Required" />
-                    <Toggle checked={block.scored} onChange={(scored) => mutateBlock(block.id, { scored })} label="Scored" />
-                    <Field label="Integrity tier">
-                      <select className={`${INPUT} py-2`} value={block.integrityTier} onChange={(e) => mutateBlock(block.id, { integrityTier: Number(e.target.value) as 0 | 1 | 2 | 3 })}>
-                        <option value={0}>0 · none</option><option value={1}>1 · signals</option><option value={2}>2 · camera + liveness</option><option value={3}>3 · ID check</option>
-                      </select>
-                    </Field>
-                    <Field label="Retakes"><select className={`${INPUT} py-2`} value={block.retakePolicy} onChange={(e) => mutateBlock(block.id, { retakePolicy: Number(e.target.value) as 0 | 1 | 2 })}><option value={0}>0</option><option value={1}>1</option><option value={2}>2</option></select></Field>
-                    <Field label="Gate · min score"><input className={`${INPUT} py-2`} type="number" placeholder="none" value={block.gate?.minBlockScore ?? ""} onChange={(e) => mutateBlock(block.id, { gate: e.target.value ? { ...block.gate, minBlockScore: Number(e.target.value) } : undefined })} /></Field>
-                    <div><span className={LABEL}>Candidate time</span><div className="rounded-lg border border-hairline bg-void2 px-3 py-2 text-[12px] text-mid">{fmtMinutes(estimateMinutes(block))}</div></div>
-                  </div>
+                      <div className="border-t border-hairline pt-4">
+                        <div className="hud-label">Hurdle · use only when job analysis supports it</div>
+                        <div className="mt-4 grid grid-cols-2 gap-4">
+                          <Field label="Minimum block score">
+                            <input
+                              className={INPUT}
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={block.gate?.minBlockScore ?? ""}
+                              onChange={(event) => patchGate({
+                                minBlockScore: event.target.value ? Number(event.target.value) : undefined,
+                              })}
+                              placeholder="No score hurdle"
+                            />
+                          </Field>
+                          <Field label="Must-have attributes · multi-select">
+                            <select
+                              multiple
+                              className={`${INPUT} min-h-24`}
+                              value={block.gate?.mustHaveIds ?? []}
+                              onChange={(event) => patchGate({
+                                mustHaveIds: Array.from(event.currentTarget.selectedOptions, (option) => option.value),
+                              })}
+                            >
+                              {attrs.map((attribute) => (
+                                <option key={attribute.id} value={attribute.id}>{attribute.name}</option>
+                              ))}
+                            </select>
+                          </Field>
+                        </div>
+                      </div>
+                      <div className="border-t border-hairline pt-4">
+                        <div className="hud-label">Method validation & permitted use</div>
+                        <div className="mt-4 grid grid-cols-3 gap-4">
+                          <Field label="Validation strategy">
+                            <select
+                              className={INPUT}
+                              value={validation.strategy}
+                              onChange={(event) => mutateBlock(block.id, {
+                                validation: { ...validation, strategy: event.target.value as NonNullable<PipelineBlock["validation"]>["strategy"] },
+                              })}
+                            >
+                              <option value="content">Content validity</option>
+                              <option value="criterion">Criterion-related</option>
+                              <option value="construct">Construct validity</option>
+                              <option value="transport">Transport evidence</option>
+                            </select>
+                          </Field>
+                          <Field label="Evidence status">
+                            <select
+                              className={INPUT}
+                              value={validation.status}
+                              onChange={(event) => mutateBlock(block.id, {
+                                validation: { ...validation, status: event.target.value as NonNullable<PipelineBlock["validation"]>["status"] },
+                              })}
+                            >
+                              <option value="draft">Draft</option>
+                              <option value="sme_reviewed">SME reviewed</option>
+                              <option value="pilot">Pilot</option>
+                              <option value="locally_validated">Locally validated</option>
+                            </select>
+                          </Field>
+                          <Field label="Permitted score use">
+                            <select
+                              className={INPUT}
+                              value={validation.scoreUse}
+                              onChange={(event) => mutateBlock(block.id, {
+                                validation: { ...validation, scoreUse: event.target.value as NonNullable<PipelineBlock["validation"]>["scoreUse"] },
+                              })}
+                            >
+                              <option value="context_only">Context only</option>
+                              <option value="decision_support">Decision support</option>
+                              <option value="selection">Selection</option>
+                            </select>
+                          </Field>
+                          <div className="col-span-2">
+                            <LinesField
+                              label="Validation evidence references · one per line"
+                              value={validation.evidenceRefs}
+                              onChange={(evidenceRefs) => mutateBlock(block.id, { validation: { ...validation, evidenceRefs } })}
+                              placeholder="Study, SME sign-off, vendor manual or local analysis reference"
+                            />
+                          </div>
+                          <Field label="Reviewed by">
+                            <input
+                              className={INPUT}
+                              value={validation.reviewedBy ?? ""}
+                              onChange={(event) => mutateBlock(block.id, {
+                                validation: { ...validation, reviewedBy: event.target.value || undefined },
+                              })}
+                              placeholder="Name and role"
+                            />
+                          </Field>
+                          <Field label="Reviewed at">
+                            <input
+                              className={INPUT}
+                              type="datetime-local"
+                              value={validation.reviewedAt?.slice(0, 16) ?? ""}
+                              onChange={(event) => mutateBlock(block.id, {
+                                validation: { ...validation, reviewedAt: event.target.value || undefined },
+                              })}
+                            />
+                          </Field>
+                          <div className="col-span-2">
+                            <Field label="Applicability note">
+                              <textarea
+                                className={`${INPUT} min-h-20 leading-relaxed`}
+                                value={validation.applicabilityNote ?? ""}
+                                onChange={(event) => mutateBlock(block.id, {
+                                  validation: { ...validation, applicabilityNote: event.target.value || undefined },
+                                })}
+                                placeholder="Why the evidence applies to this role, population and decision."
+                              />
+                            </Field>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
                 </div>}
               </div>
               {index < draft.pipeline.length - 1 && <div className="ml-8 h-3 border-l border-dashed border-hairline-strong" />}
@@ -453,6 +1121,7 @@ function PipelineStep() {
       {library && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/65" onMouseDown={(e) => { if (e.target === e.currentTarget) setLibrary(false); }}>
           <div className="h-full w-[560px] overflow-y-auto border-l border-hairline bg-void p-6">
+            {generationError && <p role="alert" className="mb-4 rounded-lg border border-neg/30 bg-neg/10 p-3 text-[11px] leading-relaxed text-neg">{generationError}</p>}
             <div className="flex items-start justify-between"><div><div className="hud-label">Block Library · 19 methods</div><h2 className="mt-2 font-display text-[24px]">What evidence should this role collect?</h2></div><button aria-label="Close block library" onClick={() => setLibrary(false)} className={BTN}><X className="size-4" /></button></div>
             {BLOCK_GROUPS.map((group) => (
               <div key={group.id} className="mt-7">
@@ -461,10 +1130,14 @@ function PipelineStep() {
                   {group.kinds.map((kind) => {
                     const meta = BLOCK_LIBRARY[kind];
                     return (
-                      <button key={kind} onClick={() => add(kind)} className={`${CARD} brackets p-4 text-left`}>
+                      <button key={kind} disabled={generatingKind !== null} onClick={() => void add(kind)} className={`${CARD} brackets p-4 text-left disabled:cursor-wait disabled:opacity-50`}>
                         <div className="flex items-center justify-between"><span className="text-[12px] font-medium text-hi">{meta.label}</span><Plus className="size-3.5 text-irisb" /></div>
                         <p className="mt-2 text-[10px] leading-relaxed text-mid">{meta.description}</p>
-                        <div className="mt-3 flex gap-2 font-mono text-[9px] text-lo"><span>{meta.defaultMinutes} min</span><span>{meta.evidenceLevel}</span>{meta.validity && <span className="text-pos">ρ {meta.validity}</span>}</div>
+                        <div className="mt-3 flex gap-2 font-mono text-[9px] text-lo">
+                          <span>{meta.defaultMinutes} min</span>
+                          <span>{meta.evidenceLevel}</span>
+                          <span>role validation required</span>
+                        </div>
                       </button>
                     );
                   })}
@@ -481,6 +1154,23 @@ function PipelineStep() {
 function ScoringStep() {
   const { draft, update } = useStudio();
   const ew = effectiveWeights(draft);
+  const aggregation = draft.scoring.aggregation ?? {
+    acrossSources: "evidence_weighted_mean" as const,
+    contradictoryEvidence: "flag_human" as const,
+    optionalBlocks: "exclude_if_missing" as const,
+    minimumCoveragePct: 70,
+  };
+  const decisionPolicy = (draft.assessmentDesign ?? DEFAULT_ASSESSMENT_DESIGN).decisionPolicy;
+  const patchAggregation = (next: Partial<NonNullable<VacancyV2["scoring"]["aggregation"]>>) => update((d) => ({
+    ...d,
+    scoring: {
+      ...d.scoring,
+      aggregation: {
+        ...(d.scoring.aggregation ?? aggregation),
+        ...next,
+      },
+    },
+  }));
   return (
     <section>
       <StepHeading eyebrow="04 · Scoring & Ranking" title="Keep the math visible." text="The model explains evidence; arithmetic—not a model—rolls scores into the composite." />
@@ -493,11 +1183,16 @@ function ScoringStep() {
           </Field>
           <Field label="Weighting mode">
             <select className={INPUT} value={draft.scoring.weighting} onChange={(e) => update((d) => ({ ...d, scoring: { ...d.scoring, weighting: e.target.value as VacancyV2["scoring"]["weighting"] } }))}>
-              <option value="rational">Rational · configured</option><option value="unit">Unit · equal within level</option><option value="pareto_assist">Pareto assist · validity / diversity</option>
+              <option value="rational">Configured · documented priorities</option>
+              <option value="unit">Unit · equal across criteria</option>
+              {draft.scoring.weighting === "pareto_assist" && (
+                <option value="pareto_assist" disabled>
+                  Legacy Pareto mode · replace before publishing
+                </option>
+              )}
             </select>
           </Field>
           <Field label={`Pass threshold · ${draft.scoring.threshold}/100`}><input className="w-full accent-[var(--iris-b)]" type="range" min={0} max={100} value={draft.scoring.threshold} onChange={(e) => update((d) => ({ ...d, scoring: { ...d.scoring, threshold: Number(e.target.value) } }))} /></Field>
-          <Toggle checked={draft.scoring.banding?.enabled ?? false} onChange={(enabled) => update((d) => ({ ...d, scoring: { ...d.scoring, banding: { enabled, sedWidth: d.scoring.banding?.sedWidth ?? 4 } } }))} label="SED-based score bands" help="Candidates inside one band are treated as statistically indistinguishable." />
           <Toggle checked={draft.scoring.anonymization.maskPII} onChange={(maskPII) => update((d) => ({ ...d, scoring: { ...d.scoring, anonymization: { ...d.scoring.anonymization, maskPII } } }))} label="Blind review by default" help="Identity stays separate from scoring and is revealed only at the configured decision gate." />
         </div>
         <div className={`${CARD} p-5`}>
@@ -519,6 +1214,135 @@ function ScoringStep() {
           </div>
         </div>
       </div>
+      <details
+        className={`${CARD} group mt-4 p-5`}
+        onToggle={(event) => {
+          if (!event.currentTarget.open || draft.assessmentDesign) return;
+          update((d) => ({ ...d, assessmentDesign: DEFAULT_ASSESSMENT_DESIGN }));
+        }}
+      >
+        <AdvancedSummary
+          title="Advanced evidence aggregation & decision safeguards"
+          text="Define how independent sources combine, when the system abstains and which controls remain human-owned."
+        />
+        <div className="mt-5 grid grid-cols-2 gap-6 border-t border-hairline pt-5">
+          <div>
+            <div className="hud-label">Aggregation across evidence sources</div>
+            <div className="mt-4 space-y-4">
+              <Field label="Cross-source rule">
+                <select
+                  className={INPUT}
+                  value={aggregation.acrossSources}
+                  onChange={(event) => patchAggregation({
+                    acrossSources: event.target.value as NonNullable<VacancyV2["scoring"]["aggregation"]>["acrossSources"],
+                  })}
+                >
+                  <option value="evidence_weighted_mean">Evidence-quality weighted mean</option>
+                  <option value="conservative_floor">Conservative floor</option>
+                  <option value="highest_quality_source">Highest-confidence eligible source</option>
+                </select>
+              </Field>
+              <Field label="Contradictory evidence">
+                <select
+                  className={INPUT}
+                  value={aggregation.contradictoryEvidence}
+                  onChange={(event) => patchAggregation({
+                    contradictoryEvidence: event.target.value as NonNullable<VacancyV2["scoring"]["aggregation"]>["contradictoryEvidence"],
+                  })}
+                >
+                  <option value="flag_human">Flag for human review</option>
+                  <option value="use_lower_confidence">Retain with lower confidence</option>
+                </select>
+              </Field>
+              <Field label="Optional blocks">
+                <select
+                  className={INPUT}
+                  value={aggregation.optionalBlocks}
+                  onChange={(event) => patchAggregation({
+                    optionalBlocks: event.target.value as NonNullable<VacancyV2["scoring"]["aggregation"]>["optionalBlocks"],
+                  })}
+                >
+                  <option value="exclude_if_missing">Exclude when missing</option>
+                  <option value="include_when_completed">Include only when completed</option>
+                </select>
+              </Field>
+              <Field label={`Minimum evidence coverage · ${aggregation.minimumCoveragePct}%`}>
+                <input
+                  className="w-full accent-[var(--iris-b)]"
+                  type="range"
+                  min={1}
+                  max={100}
+                  value={aggregation.minimumCoveragePct}
+                  onChange={(event) => patchAggregation({ minimumCoveragePct: Number(event.target.value) })}
+                />
+              </Field>
+            </div>
+          </div>
+          <div>
+            <div className="hud-label">Abstention & final decision</div>
+            <div className="mt-4 space-y-5">
+              <Field label="Minimum independent evidence items per attribute">
+                <input
+                  className={INPUT}
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={draft.scoring.abstainPolicy.minEvidencePerAttribute}
+                  onChange={(event) => update((d) => ({
+                    ...d,
+                    scoring: {
+                      ...d.scoring,
+                      abstainPolicy: {
+                        ...d.scoring.abstainPolicy,
+                        minEvidencePerAttribute: Number(event.target.value),
+                      },
+                    },
+                  }))}
+                />
+              </Field>
+              <div className="rounded-lg border border-hairline bg-void2 p-4">
+                <div className="font-mono text-[9px] uppercase tracking-[.08em] text-lo">Enforced decision policy</div>
+                <div className="mt-4 space-y-4">
+                  <Toggle
+                    checked={draft.scoring.abstainPolicy.onAbstain === "flag_human"}
+                    onChange={() => undefined}
+                    label="Abstentions create a human-review task"
+                    disabled
+                  />
+                  <Toggle
+                    checked={decisionPolicy.humanFinalDecision}
+                    onChange={() => undefined}
+                    label="Named human makes the final decision"
+                    help="AI evidence and arithmetic support the decision; they do not become the accountable decision-maker."
+                    disabled
+                  />
+                  <Toggle
+                    checked={!decisionPolicy.allowAutomatedRejection}
+                    onChange={() => undefined}
+                    label="Automated rejection is disabled"
+                    disabled
+                  />
+                  <Toggle
+                    checked={decisionPolicy.requireReasonCode}
+                    onChange={() => undefined}
+                    label="Decision reason code is required"
+                    disabled
+                  />
+                  <Toggle
+                    checked={decisionPolicy.requireEvidenceCitation}
+                    onChange={() => undefined}
+                    label="Evidence citation is required"
+                    disabled
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] leading-relaxed text-lo">
+                If coverage is insufficient or evidence conflicts, the system abstains and creates a human-review task; it never invents a neutral score.
+              </p>
+            </div>
+          </div>
+        </div>
+      </details>
     </section>
   );
 }
@@ -583,7 +1407,26 @@ function GovernanceStep() {
   );
 }
 
-function CandidatePreview({ onClose }: { onClose: () => void }) {
+function candidatePreviewSignature(draft: VacancyV2) {
+  return JSON.stringify({
+    profile: draft.profile,
+    pipeline: draft.pipeline.map((block) => ({
+      id: block.id,
+      order: block.order,
+      title: block.title,
+      candidateIntro: block.candidateIntro,
+      required: block.required,
+      estimatedMinutes: block.estimatedMinutes,
+      accessibility: block.accessibility,
+      languageOverride: block.languageOverride,
+      deadlineOffsetHours: block.deadlineOffsetHours,
+    })),
+    experience: draft.experience,
+    window: draft.window,
+  });
+}
+
+function CandidatePreview({ onClose, onAcknowledge }: { onClose: () => void; onAcknowledge: () => void }) {
   const { draft } = useStudio();
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-8" onMouseDown={(e) => { if (e.currentTarget === e.target) onClose(); }}>
@@ -596,29 +1439,58 @@ function CandidatePreview({ onClose }: { onClose: () => void }) {
           {draft.pipeline.filter((b) => b.required).map((b, i) => <div key={b.id} className="rounded-xl border border-black/10 bg-white p-4"><div className="font-mono text-[9px] text-black/40">STEP {String(i + 1).padStart(2, "0")}</div><div className="mt-2 text-[12px] font-medium">{b.title}</div><div className="mt-1 text-[10px] text-black/50">{fmtMinutes(estimateMinutes(b))}</div></div>)}
         </div>
         <div className="mt-6 rounded-xl bg-black p-5 text-white"><div className="font-mono text-[9px] text-white/45">WHAT AI DOES — AND NEVER DOES</div><p className="mt-2 text-[12px] leading-relaxed text-white/75">{draft.experience.notices.aiDisclosure}</p></div>
-        <div className="mt-6 flex items-center justify-between"><span className="text-[11px] text-black/50">Accommodation or alternative-process request available at every step.</span><button onClick={onClose} className="rounded-lg bg-black px-4 py-2.5 text-[12px] text-white">Continue</button></div>
+        <div className="mt-6 flex items-center justify-between gap-4">
+          <span className="text-[11px] text-black/50">Accommodation or alternative-process request available at every step.</span>
+          <div className="flex shrink-0 gap-2">
+            <button onClick={onClose} className="rounded-lg border border-black/15 px-4 py-2.5 text-[12px] text-black/65">Close</button>
+            <button onClick={onAcknowledge} className="rounded-lg bg-black px-4 py-2.5 text-[12px] text-white">I reviewed this experience</button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function PreflightStep() {
+function PreflightStep({
+  reviewedPreviewSignature,
+  onReviewedPreview,
+}: {
+  reviewedPreviewSignature: string | null;
+  onReviewedPreview: (signature: string) => void;
+}) {
   const { draft, replace, resetBlank } = useStudio();
   const issues = preflight(draft);
   const blockers = issues.filter((i) => i.severity === "blocker");
   const [preview, setPreview] = useState(false);
-  const [previewed, setPreviewed] = useState(false);
+  const previewSignature = candidatePreviewSignature(draft);
+  const previewed = reviewedPreviewSignature === previewSignature;
   const [published, setPublished] = useState<VacancyV2 | null>(null);
   const [copied, setCopied] = useState(false);
-  const publish = () => {
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState("");
+  const publish = async () => {
     if (blockers.length || !previewed) return;
-    const value = publishDraft(draft);
-    replace(value);
-    setPublished(value);
+    setPublishing(true);
+    setPublishError("");
+    try {
+      const response = await fetch("/api/hr/vacancies/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vacancy: draft, previewed: true }),
+      });
+      const body = (await response.json()) as { vacancy?: VacancyV2; error?: string };
+      if (!response.ok || !body.vacancy) throw new Error(body.error || "Publishing failed.");
+      replace(body.vacancy);
+      setPublished(body.vacancy);
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : "Publishing failed.");
+    } finally {
+      setPublishing(false);
+    }
   };
   return (
     <section>
-      <StepHeading eyebrow="07 · Preflight / Publish" title={published ? "Competition is live." : "Prove the chain is complete."} text="Blockers protect traceability, candidate rights and meaningful human review. Warnings require judgment." action={<button className={`${BTN} inline-flex items-center gap-2`} onClick={() => { setPreview(true); setPreviewed(true); }}><Eye className="size-3.5" /> Preview as candidate</button>} />
+      <StepHeading eyebrow="07 · Preflight / Publish" title={published ? "Competition is live." : "Prove the chain is complete."} text="Blockers protect traceability, candidate rights and meaningful human review. Warnings require judgment." action={<button className={`${BTN} inline-flex items-center gap-2`} onClick={() => setPreview(true)}><Eye className="size-3.5" /> Preview as candidate</button>} />
       {published ? (
         <div className={`${CARD} p-8 text-center`}>
           <div className="mx-auto grid size-12 place-items-center rounded-full border border-pos/40 bg-pos/10"><Check className="size-5 text-pos" /></div>
@@ -662,12 +1534,23 @@ function PreflightStep() {
               <div className="flex items-center justify-between"><span className="text-mid">Candidate preview</span><span className={previewed ? "text-pos" : "text-warn"}>{previewed ? "reviewed" : "required"}</span></div>
               <div className="flex items-center justify-between"><span className="text-mid">Human reviewer</span><span className={draft.governance.roles.some((r) => r.role !== "Observer") ? "text-pos" : "text-neg"}>{draft.governance.roles.some((r) => r.role !== "Observer") ? "assigned" : "missing"}</span></div>
             </div>
-            <button disabled={blockers.length > 0 || !previewed} onClick={publish} className="mt-5 w-full rounded-lg bg-paper px-4 py-3 text-[13px] font-medium text-void disabled:cursor-not-allowed disabled:opacity-25">Freeze config & publish</button>
+            <button disabled={blockers.length > 0 || !previewed || publishing} onClick={() => void publish()} className="mt-5 w-full rounded-lg bg-paper px-4 py-3 text-[13px] font-medium text-void disabled:cursor-not-allowed disabled:opacity-25">
+              {publishing ? "Publishing…" : "Freeze config & publish"}
+            </button>
+            {publishError && <p role="alert" className="mt-3 text-[11px] leading-relaxed text-neg">{publishError}</p>}
             <p className="mt-3 text-[10px] leading-relaxed text-lo">Publishing freezes criteria, rubrics, prompts and notices into config version {draft.configVersion}. Later edits create a new version.</p>
           </div>
         </div>
       )}
-      {preview && <CandidatePreview onClose={() => setPreview(false)} />}
+      {preview && (
+        <CandidatePreview
+          onClose={() => setPreview(false)}
+          onAcknowledge={() => {
+            onReviewedPreview(previewSignature);
+            setPreview(false);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -694,6 +1577,22 @@ function ImpactPanel() {
         <div className="mt-4 space-y-3 text-[12px]">
           <div className="flex items-center justify-between"><span className="text-mid">Candidate time</span><span className={impact.totalMinutes > 45 ? "text-warn" : "text-hi"}>{fmtMinutes(impact.totalMinutes)}</span></div>
           <div className="flex items-center justify-between"><span className="text-mid">Criteria covered</span><span className="text-hi">{covered} of {coverage.length}</span></div>
+          <div className="flex items-center justify-between">
+            <span className="text-mid">Validation readiness</span>
+            <span
+              title={impact.validationReadiness.missing.join(" ")}
+              className={
+                impact.validationReadiness.status === "operational"
+                  ? "text-pos"
+                  : impact.validationReadiness.status === "prelaunch"
+                    ? "text-hi"
+                    : "text-warn"
+              }
+            >
+              {impact.validationReadiness.passed} of{" "}
+              {impact.validationReadiness.total}
+            </span>
+          </div>
           <div className="flex items-center justify-between"><span className="text-mid">Issues to review</span><span className={impact.lint.blockers ? "text-neg" : issueCount ? "text-warn" : "text-pos"}>{issueCount || "None"}</span></div>
           <div className="flex gap-1 pt-1">{coverage.map((item) => <span key={item.attributeId} title={item.attributeName} className={`h-1 flex-1 rounded ${item.ok ? "bg-pos" : "bg-warn"}`} />)}</div>
         </div>
@@ -704,9 +1603,27 @@ function ImpactPanel() {
 
 export default function VacancyStudio() {
   const { draft, entered, step, setStep, resetBlank } = useStudio();
+  const [reviewedPreviewSignature, setReviewedPreviewSignature] = useState<string | null>(null);
   const issues = useMemo(() => preflight(draft), [draft]);
   if (!entered) return <Entry />;
-  const panels = [<ProfileStep key="p" />, <CriteriaStep key="c" />, <PipelineStep key="pl" />, <ScoringStep key="s" />, <ExperienceStep key="e" />, <GovernanceStep key="g" />, <PreflightStep key="pf" />];
+  const resetWithConfirmation = () => {
+    if (!window.confirm("Discard this vacancy draft and return to the entry modes? This cannot be undone.")) return;
+    setReviewedPreviewSignature(null);
+    resetBlank();
+  };
+  const panels = [
+    <ProfileStep key="p" />,
+    <CriteriaStep key="c" />,
+    <PipelineStep key="pl" />,
+    <ScoringStep key="s" />,
+    <ExperienceStep key="e" />,
+    <GovernanceStep key="g" />,
+    <PreflightStep
+      key="pf"
+      reviewedPreviewSignature={reviewedPreviewSignature}
+      onReviewedPreview={setReviewedPreviewSignature}
+    />,
+  ];
   return (
     <div className="grid min-h-[calc(100vh-52px)] grid-cols-[214px_minmax(0,1fr)] bg-void2">
       <nav className="border-r border-hairline bg-void px-3 py-5">
@@ -722,7 +1639,7 @@ export default function VacancyStudio() {
             );
           })}
         </div>
-        <button onClick={resetBlank} className="mt-6 flex w-full items-center gap-2 px-3 py-2 text-[10px] text-lo hover:text-hi"><RotateCcw className="size-3" /> Change entry mode</button>
+        <button onClick={resetWithConfirmation} className="mt-6 flex w-full items-center gap-2 px-3 py-2 text-[10px] text-lo hover:text-hi"><RotateCcw className="size-3" /> Change entry mode</button>
       </nav>
       <div className="grid grid-cols-[minmax(0,1fr)_210px] gap-5 px-6 py-7">
         <main className="min-w-0">{panels[step - 1]}</main>

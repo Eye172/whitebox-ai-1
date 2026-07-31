@@ -1,11 +1,9 @@
 /* ============================================================
-   EVALUATION ENGINE — SPEC §8 (deterministic heuristic stub).
+   DETERMINISTIC DEMO EVALUATION — SPEC §8 contract reference.
    Stage A (§8.2): independent per-block scoring at block submission.
    Stage B (§8.3): mechanical rollup + cross-source synthesis.
-   The exported contracts are exactly what the real LLM engine
-   (Claude family, temperature 0, k=3 self-consistency) implements —
-   swapping the heuristics for model calls changes NOTHING outside
-   this file and the /api/engine/* route handlers.
+   This implementation is used only in development demo mode and unit tests.
+   Production evaluation runs through lib/server/ai-provider.ts.
    Non-negotiables honored here (§8.1): per-attribute scoring only,
    evidence quotes with locators, ranked drivers (principal first),
    abstain → human tray (never a low score), EngineStamp on every
@@ -18,6 +16,7 @@ import type {
   Driver, EngineStamp, EvidenceChip, EvidenceSpan, IntegritySignal, ItemScore,
   InterviewQuestion, PipelineBlock, ReasoningStep, RubricDimension, Tier, VacancyV2,
 } from "./types";
+import { sanitizeIntegritySignals } from "./integrity-signals";
 
 /* ———————————————————————— shared helpers ———————————————————————— */
 
@@ -45,9 +44,9 @@ const capBandAt = (b: ConfidenceBand, cap: ConfidenceBand): ConfidenceBand =>
 
 function makeStamp(vacancy: VacancyV2, promptId: string): EngineStamp {
   return {
-    model: "wbx-score-3.0-stub",
+    model: "wbx-demo-rubric-evaluator-1",
     promptId,
-    promptVersion: "v1",
+    promptVersion: "demo-v1",
     rubricVersion: "v" + vacancy.configVersion,
     runs: 3,
     scoredAt: new Date().toISOString(),
@@ -257,7 +256,10 @@ function assembleBlockResult(
     drivers,
     evidence,
     reasoning,
-    integrity: [...result.integrityEvents, ...integrityHeuristics(block, result, totalWords)],
+    integrity: [
+      ...sanitizeIntegritySignals(result.integrityEvents),
+      ...integrityHeuristics(block, result, totalWords),
+    ],
     engine: makeStamp(vacancy, "scorer.item"),
   };
 }
@@ -608,7 +610,7 @@ function scoreArtifact(
     { step: 1, text: "The artifact's text was scored dimension by dimension against the rubric — never as one holistic impression." },
     { step: 2, text: "Structure, concreteness, and scope heuristics stand in for the rubric-dimension scorers of the real engine." },
     { step: 3, text: "Each dimension cites a line span from the submission as its evidence chip." },
-    { step: 4, text: "Originality and similarity checks report as integrity advisories, never as score deductions." },
+    { step: 4, text: "This demo evaluator produced no originality or similarity inference." },
     { step: 5, text: "Dimension scores were averaged into the block score with the evidence-density adjustment." },
   ];
 
@@ -682,7 +684,7 @@ function passthroughResult(vacancy: VacancyV2, block: PipelineBlock, result: Blo
       { step: 2, text: "Its outputs (documents, knockout answers, human notes) feed verification and the claims ledger instead." },
       { step: 3, text: "Integrity telemetry, if any, is attached below as neutral advisory context." },
     ],
-    integrity: [...result.integrityEvents],
+    integrity: sanitizeIntegritySignals(result.integrityEvents),
     engine: makeStamp(vacancy, "scorer.item"),
   };
 }
@@ -1085,17 +1087,20 @@ export function evaluateApplication(vacancy: VacancyV2, app: ApplicationRecord):
 export function evaluationToCandidate(app: ApplicationRecord, ev: CandidateEvaluation, rank: number): Candidate {
   const anyVerified = ev.claims.some((c) => c.status === "VERIFIED");
   const docBlockPresent = app.blockResults.some((r) => r.kind === "doc_verification");
+  const complete = ev.complete ?? true;
+  const rankEligible = complete && ev.tier !== null;
   return {
     internalId: app.candidate.internalId,
-    rank,
+    rank: rankEligible ? rank : null,
     overall: ev.overall,
-    tier: ev.tier,
+    tier: rankEligible ? ev.tier : null,
     confidence: ev.confidence,
     confidencePhrase: ev.confidencePhrase,
     verification: anyVerified ? "VERIFIED" : docBlockPresent ? "PENDING" : "—",
     divergence: false, // reserved for human-override divergence, set by the review surface
-    integrityAdvisory: ev.perBlock.some((b) => b.integrity.some((s) => s.level === "medium")),
     appliedAt: app.createdAt.slice(0, 10),
+    evaluationComplete: complete,
+    evaluationCoverage: ev.coverage ?? (complete ? 100 : 0),
     competencies: ev.attributeScores,
     strengths: ev.synthesis.strengths,
     weaknesses: ev.synthesis.risks,

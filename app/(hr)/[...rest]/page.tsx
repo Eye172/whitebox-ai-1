@@ -1,6 +1,5 @@
-import HrSurface from "@/components/hr/HrSurface";
+import { notFound } from "next/navigation";
 
-export default async function SurfacePage({ params }: { params: Promise<{ rest: string[] }> }) {
-  const { rest } = await params;
-  return <HrSurface path={rest.join("/")} />;
+export default function SurfacePage() {
+  notFound();
 }

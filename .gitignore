@@ -5,6 +5,10 @@
 /.next
 /out
 
+# local persistence and generated tests
+/.data
+/tests/dist
+
 # build artifacts
 *.tsbuildinfo
 next-env.d.ts
@@ -12,13 +16,16 @@ next-env.d.ts
 # misc
 .DS_Store
 *.pem
+npm-debug.log*
 
 # env files
 .env
 .env*.local
+/API.md
 
 # screenshots
 /screenshots
 
 # local development process logs
 /.codex-dev*.log
+/.codex-production*.log

@@ -1,121 +1,33 @@
-/* ============================================================
-   AI CONTRACTS + STUBS — MASTERDOC · Book I · Part XI, Book V · §V.3
-   These are the exact typed contracts the real backend implements
-   (FastAPI + Instructor/Outlines + LangGraph). The stubs below are
-   deterministic heuristics so the whole product flow runs today;
-   swapping them for real LLM calls changes NOTHING outside this file
-   and the /api/ai/* route handlers.
-   ============================================================ */
+import type {
+  InterviewStepRequest,
+  InterviewStepResponse,
+} from "../ai-contracts";
+import { createBlock } from "../blocks";
+import { createEmptyDraft } from "../studio";
+import type {
+  AttributeKind,
+  AttributeSpec,
+  CategorySpec,
+  IndustryPack,
+  InterviewQuestion,
+  PipelineBlock,
+  PositionProfile,
+  QuestionType,
+  Rubric,
+  Seniority,
+  VacancyV2,
+} from "../types";
+import type { VacancyAiExecutionMode } from "./ai-rollout";
+import { isDevelopmentDemoMode } from "./env";
 
-/* ---------- 1 · NL → CONFIG (powers T2.1, "why" chips included) ---------- */
-
-export interface GeneratedField<T> {
-  value: T;
-  rationale: string; // feeds the in-UI "why the AI set this" chip — never omitted
-}
-
-export interface CompetencyConfigItem {
-  name: string;
-  weight: number; // all weights sum to 100 — validated
-  rationale: string;
-  focus: boolean; // focus attributes are iris-highlighted in the builder
-}
-
-export interface VacancyConfig {
-  categories: CompetencyConfigItem[];
-  interviewType: GeneratedField<"adaptive-video" | "adaptive-voice">;
-  questionDepth: GeneratedField<"standard" | "deep" | "expert">;
-  requiredDocuments: GeneratedField<string[]>;
-  passThreshold: GeneratedField<number>;
-  languages: GeneratedField<string[]>;
-}
-
-export interface NlToConfigRequest {
-  title: string;
-  description: string; // employer's plain-language role description (any language)
-}
-
-export interface NlToConfigResponse {
-  config: VacancyConfig;
-  modelVer: string; // pinned per vacancy for reproducibility (Part XI.3)
-  promptVer: string;
-}
-
-/* keyword heuristics standing in for the LLM structured-extraction call */
-const COMPETENCY_SIGNALS: { name: string; focusHints: RegExp; rationaleHit: string; rationaleMiss: string }[] = [
-  { name: "Leadership", focusHints: /лидер|leader|руковод|команд|team|manage|вести за/i, rationaleHit: "The description names leading people directly — weighted as a focus attribute.", rationaleMiss: "Kept at a low weight: the role text does not emphasize people leadership." },
-  { name: "Decision-Making", focusHints: /решени|decision|приорит|trade-?off|выбор|бюджет/i, rationaleHit: "The employer stresses making calls under constraints — high impact on outcomes.", rationaleMiss: "Standard weight: decisions implied but not emphasized." },
-  { name: "Communication", focusHints: /коммуника|communicat|переговор|клиент|stakeholder|презент|обратн.. связ/i, rationaleHit: "Stakeholder/client interaction is explicit in the description.", rationaleMiss: "Baseline weight for any collaborative role." },
-  { name: "Stress-Resilience", focusHints: /стресс|stress|давлен|дедлайн|deadline|конфликт|conflict|кризис/i, rationaleHit: "Pressure and conflict situations appear in the employer's text.", rationaleMiss: "Low weight: no pressure context named." },
-  { name: "Analytical Thinking", focusHints: /аналит|analy|данн|data|метрик|metric|критическ|critical/i, rationaleHit: "The role asks for reasoning over data and metrics explicitly.", rationaleMiss: "Included at base weight for professional roles." },
-  { name: "Customer Empathy", focusHints: /клиент|customer|пользовател|user|эмпат|empath|сервис|service/i, rationaleHit: "Customer/user focus is called out — measured through scenario questions.", rationaleMiss: "Omittable: no customer-facing signals found." },
-  { name: "Growth Potential", focusHints: /рост|growth|потенциал|potential|обуча|learn|развит/i, rationaleHit: "The employer explicitly prioritizes growth potential over current experience.", rationaleMiss: "Kept small: growth not mentioned as a priority." },
-];
-
-export function nlToConfigStub(req: NlToConfigRequest): NlToConfigResponse {
-  const text = req.description;
-  const scored = COMPETENCY_SIGNALS.map((s) => ({
-    name: s.name,
-    hit: s.focusHints.test(text),
-    rationale: s.focusHints.test(text) ? s.rationaleHit : s.rationaleMiss,
-  }));
-  let picked = scored.filter((s) => s.hit);
-  if (picked.length < 3) picked = [...picked, ...scored.filter((s) => !s.hit).slice(0, 3 - picked.length)];
-  if (picked.length > 6) picked = picked.slice(0, 6);
-
-  // weights: focus attributes get double share, everything normalized to exactly 100
-  const shares = picked.map((p) => (p.hit ? 2 : 1));
-  const total = shares.reduce((a, b) => a + b, 0);
-  let acc = 0;
-  const categories: CompetencyConfigItem[] = picked.map((p, i) => {
-    const w = i === picked.length - 1 ? 100 - acc : Math.round((shares[i] / total) * 100);
-    acc += w;
-    return { name: p.name, weight: w, rationale: p.rationale, focus: p.hit };
-  });
-
-  const deep = /senior|lead|глубок|expert|сложн/i.test(text);
-  const docs = /диплом|degree|сертифи|certif|образован/i.test(text);
-  const ru = /[а-яё]/i.test(text);
-
-  return {
-    config: {
-      categories,
-      interviewType: { value: "adaptive-video", rationale: "Behavioral competencies dominate the config — video lets the agent probe real episodes and follow up." },
-      questionDepth: { value: deep ? "deep" : "standard", rationale: deep ? "Seniority markers in the description warrant second-level follow-ups." : "No seniority markers — standard depth keeps candidate effort proportionate." },
-      requiredDocuments: { value: docs ? ["Diploma / degree", "Certifications named in interview"] : [], rationale: docs ? "The employer references formal education — claims will be verified, then sources auto-deleted." : "No credential requirements detected; documents stay optional." },
-      passThreshold: { value: 65, rationale: "Default calibrated threshold; adjust with the live pass-rate preview." },
-      languages: { value: ru ? ["ru", "en"] : ["en"], rationale: ru ? "Description is in Russian — interview offered in Russian and English." : "English-only description." },
-    },
-    modelVer: "stub-nl2config-0.1", // real impl: claude-* + Instructor, pinned per vacancy
-    promptVer: "v0-heuristic",
-  };
-}
-
-/* ---------- 2 · ADAPTIVE INTERVIEW AGENT (powers T2.4) ---------- */
-/* Stateless contract: the client carries the running interview state,
-   the real LangGraph agent will hold it server-side instead — same shape. */
-
-export interface InterviewTurn {
-  question: string;
-  topic: string;
-  kind: "main" | "followup";
-  answer?: string;
-}
-
-export interface InterviewStepRequest {
-  vacancyTitle: string;
-  competencies: { name: string; weight: number }[];
-  history: InterviewTurn[]; // last entry's answer just given by the candidate
-}
-
-export interface InterviewStepResponse {
-  done: boolean;
-  question?: string;
-  topic?: string;
-  kind?: "main" | "followup";
-  progress: number; // 0..1, approximate — candidate UI shows gentle progress only
-  closing?: string;
-}
+/**
+ * Explicit compatibility-only implementations.
+ *
+ * Nothing in this module is a production authoring source. Historical
+ * applications may use the deterministic interview path only when their
+ * frozen execution mode is `legacy_deterministic`; demo vacancy generation is
+ * additionally restricted to explicit development demo mode.
+ */
 
 const MAIN_TEMPLATES: Record<string, string> = {
   Leadership: "Tell me about a time you led people through something that was failing. What did you actually do?",
@@ -133,13 +45,21 @@ const FOLLOWUPS = [
   "If you faced it again tomorrow, what would you do differently?",
 ];
 
-export function interviewStepStub(req: InterviewStepRequest): InterviewStepResponse {
+export function nextLegacyDeterministicInterviewStep(
+  req: InterviewStepRequest,
+  executionMode: VacancyAiExecutionMode,
+): InterviewStepResponse {
+  if (executionMode !== "legacy_deterministic") {
+    throw new Error(
+      "The deterministic interview implementation is restricted to frozen legacy applications.",
+    );
+  }
   const ordered = [...req.competencies].sort((a, b) => b.weight - a.weight).slice(0, 5);
   const mainsAsked = req.history.filter((t) => t.kind === "main").length;
   const last = req.history[req.history.length - 1];
   const totalPlanned = ordered.length + 2; // rough: mains + ~2 follow-ups
 
-  // follow-up rule (stands in for consistency/depth checks): short answer → probe once
+  // Historical compatibility rule: a short main answer receives one probe.
   if (last?.answer && last.kind === "main" && last.answer.trim().length < 140) {
     return {
       done: false,
@@ -168,18 +88,7 @@ export function interviewStepStub(req: InterviewStepRequest): InterviewStepRespo
   };
 }
 
-/* ---------- 3 · STUDIO AUTHORING STUBS (SPEC §4.3.3 suggestion engine,
-   §4.4 question/rubric/SJT drafting, §8.4 authoring.* prompts) ----------
-   These stand in for the authoring.question / authoring.rubric /
-   authoring.sjt prompt family — they never run on candidates. */
-
-import type {
-  AttributeKind, AttributeSpec, CategorySpec, IndustryPack, InterviewQuestion,
-  KnockoutItem, PipelineBlock, PositionProfile, QuestionType, Rubric, Seniority,
-  SjtItem, VacancyV2,
-} from "./types";
-import { createEmptyDraft } from "./studio";
-import { createBlock } from "./blocks";
+/* Development fixture authoring. These helpers are not model fallbacks. */
 
 const rand = () => Math.random().toString(36).slice(2, 8);
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -339,7 +248,7 @@ function normalizeTo100(shares: number[]): number[] {
 
 /* —— SPEC §4.3.3 — the suggestion engine —— */
 
-export function suggestCriteria(profile: PositionProfile): CategorySpec[] {
+function buildDemoCriteria(profile: PositionProfile): CategorySpec[] {
   const text = [profile.title, profile.mission, ...(profile.responsibilities ?? [])].join(". ");
   const seniorPlus = ["Senior", "Lead", "Head", "Executive"].includes(profile.seniority);
   const juniorish = ["Intern", "Junior"].includes(profile.seniority);
@@ -395,7 +304,7 @@ export function suggestCriteria(profile: PositionProfile): CategorySpec[] {
 
 /* —— rubric drafting: anchors flow from the attribute scale (§4.4.4 rubric lock) —— */
 
-export function draftRubric(attr: AttributeSpec): Rubric {
+function buildDemoRubric(attr: AttributeSpec): Rubric {
   return {
     id: "r-" + rand(),
     attributeId: attr.id,
@@ -446,7 +355,11 @@ function questionTextFor(attr: AttributeSpec, type: QuestionType): string {
   }
 }
 
-export function draftQuestion(attr: AttributeSpec, type: QuestionType, seniority: Seniority): InterviewQuestion {
+function buildDemoQuestion(
+  attr: AttributeSpec,
+  type: QuestionType,
+  seniority: Seniority,
+): InterviewQuestion {
   /* Huffcutt moderator (R-I.2): past-behavior questions need a past to draw on —
      for Junior/Intern, behavioral requests are drafted as situational instead */
   const juniorish = seniority === "Junior" || seniority === "Intern";
@@ -460,9 +373,9 @@ export function draftQuestion(attr: AttributeSpec, type: QuestionType, seniority
     answerCapSec: 180,
     modality: "video",
     reRecordAttempts: 1,
-    notesAllowed: true,
+    notesAllowed: false,
     probes: [...AUTHOR_PROBES],
-    rubric: draftRubric(attr),
+    rubric: buildDemoRubric(attr),
     source: "ai",
     rationale:
       effectiveType !== type
@@ -471,40 +384,7 @@ export function draftQuestion(attr: AttributeSpec, type: QuestionType, seniority
   };
 }
 
-/* —— SJT drafting: industry scenario frames, 4 keyed options, SME review required —— */
-
-const SJT_SCENARIOS: Record<IndustryPack, string> = {
-  tech: "A release is due tomorrow; QA finds an intermittent bug nobody can reproduce reliably, and the product manager still wants to ship.",
-  sales_cs: "A key account emails that they are considering a competitor — and copies your manager.",
-  healthcare: "During a busy shift, a colleague skips a documented checklist step and asks you to sign off anyway.",
-  finance: "You find a small reconciliation discrepancy on the morning the reports go out to the regulator.",
-  retail_hourly: "Two customers need help at once, your queue is growing, and a delivery has just arrived at the door.",
-  manufacturing: "A machine's safety guard keeps jamming; removing it would keep the line running until the end of the shift.",
-  logistics: "A shipment will miss its delivery window unless you reroute it outside the approved process.",
-  creative: "A client rejects the agreed concept a day before launch and asks for “something completely different”.",
-  public_sector: "A citizen's request is clearly valid but falls outside the written procedure you are required to follow.",
-  education: "A student challenges your grading decision in front of the whole class.",
-  custom: "A deadline, a quality concern, and a colleague's urgent request all land in the same hour.",
-};
-
-export function draftSjtItem(attr: AttributeSpec, industry: IndustryPack, index: number): SjtItem {
-  const n = attr.name.toLowerCase();
-  return {
-    id: `sjt-${index + 1}-${rand()}`,
-    scenario: `${SJT_SCENARIOS[industry]} The situation turns on your ${n}.`,
-    mediaKind: "text",
-    options: [
-      { id: `o-${index + 1}-a`, text: "Raise it immediately with the people affected, state the facts and the options, and propose a course of action.", keyScore: 3 },
-      { id: `o-${index + 1}-b`, text: "Handle it quietly yourself first, and mention it afterwards if anyone asks.", keyScore: 1 },
-      { id: `o-${index + 1}-c`, text: "Gather more information before acting, and set a clear time limit for the decision.", keyScore: 2 },
-      { id: `o-${index + 1}-d`, text: "Escalate it upward and wait for instructions before doing anything.", keyScore: 0 },
-    ],
-    attributeId: attr.id,
-    smeReviewed: false, // generated items require the SME checklist before they become scoreable (R-I.8)
-  };
-}
-
-/* —— Describe mode: plain text → full VacancyV2 draft (§4.1 entry C) —— */
+/* Development-only vacancy fixture generation. */
 
 const SENIORITY_MARKERS: [RegExp, Seniority][] = [
   [/chief|c-level|\bceo\b|\bcto\b|\bcoo\b|founder|директор по/i, "Executive"],
@@ -528,13 +408,18 @@ const INDUSTRY_MARKERS: [RegExp, IndustryPack][] = [
   [/учитель|teacher|препода|tutor|education|образователь/i, "education"],
 ];
 
-const RE_CREDENTIAL = /диплом|degree|сертифи|certif|licen[cs]e|лиценз|высшее образование|образование обязательно/i;
-const RE_MIN_YEARS = /(?:от|минимум|не менее|at least|minimum(?: of)?)\s*(\d{1,2})\s*(?:лет|год(?:а|ов)?|years?)|(\d{1,2})\+?\s*(?:лет|год(?:а|ов)?|years?)\s*(?:опыта|of experience|experience|relevant experience)/i;
-
-export function nlToVacancyDraft(title: string, description: string): VacancyV2 {
+export function createDemoVacancyDraft(
+  title: string,
+  description: string,
+): VacancyV2 {
+  if (!isDevelopmentDemoMode()) {
+    throw new Error(
+      "Demo vacancy generation is available only in explicit development demo mode.",
+    );
+  }
   const draft = createEmptyDraft();
   const text = `${title}. ${description}`;
-  const ru = /[а-яё]/i.test(description); // same language detection as nlToConfigStub
+  const ru = /[а-яё]/i.test(description);
 
   const seniority = SENIORITY_MARKERS.find(([re]) => re.test(text))?.[1] ?? "Middle";
   const industryPack = INDUSTRY_MARKERS.find(([re]) => re.test(text))?.[1] ?? "custom";
@@ -553,80 +438,29 @@ export function nlToVacancyDraft(title: string, description: string): VacancyV2 
     languages: { primary: ru ? "ru" : "en", alternates: ru ? ["en"] : [] },
   };
 
-  const categories = suggestCriteria(profile);
+  const categories = buildDemoCriteria(profile);
   const allAttrs = categories.flatMap((c) => c.attributes);
   const interviewAttrs = [
     ...allAttrs.filter((a) => a.focus),
     ...allAttrs.filter((a) => !a.focus),
   ].slice(0, 6); // one question per attribute, max 6, focus first
 
-  const credentialHit = RE_CREDENTIAL.test(text);
-  const yearsMatch = text.match(RE_MIN_YEARS);
-  const minYears = yearsMatch ? Number(yearsMatch[1] ?? yearsMatch[2] ?? 0) : 0;
-
   const pipeline: PipelineBlock[] = [];
   let order = 1;
 
-  /* knockout only when the employer states hard requirements — neutral wording (§4.3.2) */
-  if (credentialHit || minYears > 0) {
-    const items: KnockoutItem[] = [];
-    if (minYears > 0) {
-      items.push({
-        id: "ko-years",
-        question: `How many years have you worked in roles like this one?`,
-        type: "numeric_threshold",
-        threshold: minYears,
-        immediate: false, // routes to the knockout review tray, never the void
-        rejectionText: `This role asks for at least ${minYears} year${minYears > 1 ? "s" : ""} of relevant experience. If your background covers the ground differently, you can explain — a person will read it.`,
-        allowAppeal: true,
-      });
-    }
-    if (credentialHit) {
-      items.push({
-        id: "ko-credential",
-        question: "Do you hold the formal qualification named in the role description?",
-        type: "yes_no",
-        passValue: true,
-        immediate: false,
-        rejectionText: "This role names a formal qualification. If you have an equivalent, tell us — a person reviews every case.",
-        allowAppeal: true,
-      });
-    }
-    const ko = createBlock("knockout", order++);
-    ko.title = "Basic requirements";
-    ko.candidateIntro = "Two quick factual questions about the role's stated requirements. A person reviews every borderline answer — nothing here disappears into a void.";
-    ko.scored = false;
-    ko.estimatedMinutes = 2;
-    ko.measures = [];
-    ko.settings = { kind: "knockout", items, placement: "before_form" };
-    pipeline.push(ko);
-  }
-
-  const cv = createBlock("cv_intake", order++);
-  cv.title = "CV intake";
-  cv.candidateIntro = "Upload your CV so we can pre-fill your answers and log the claims we should verify later. It is reviewed anonymized — names and photos are masked.";
-  cv.scored = false;
-  cv.estimatedMinutes = 3;
-  cv.measures = [];
-  cv.settings = {
-    kind: "cv_intake",
-    acceptedFormats: ["pdf", "docx"],
-    maxSizeMb: 10,
-    parseTargets: ["employment", "education", "certifications", "skills", "links"],
-    anonymizeForReview: true,
-    extractClaims: true,
-    portfolioUrlField: industryPack === "creative" || industryPack === "tech",
-  };
-  pipeline.push(cv);
-
   const questions = interviewAttrs.map((a) =>
-    draftQuestion(a, a.kind === "knowledge" ? "job_knowledge" : "behavioral", seniority)
+    buildDemoQuestion(
+      a,
+      a.kind === "knowledge" ? "job_knowledge" : "behavioral",
+      seniority,
+    )
   );
   const shares = normalizeTo100(interviewAttrs.map((a) => (a.focus ? 2 : 1)));
   const interview = createBlock("async_interview", order++);
   interview.title = "Structured interview";
-  interview.candidateIntro = `Recorded interview: ${questions.length} questions, each tied to one published criterion — you can see exactly what is measured and why it is job-relevant. 30 seconds to think, up to 3 minutes to answer, one re-record.`;
+  interview.candidateIntro = `Structured recorded video interview: ${questions.length} questions, each tied to one published criterion. Camera and microphone answers are transcribed; only reviewed answer evidence is scored. No frames are extracted, and no gaze, reading behavior, appearance, emotion, or voice traits are inferred. A text accommodation is available.`;
   interview.scored = true;
+  interview.integrityTier = 1;
   interview.estimatedMinutes = questions.length * 3 + 2;
   interview.measures = interviewAttrs.map((a, i) => ({ attributeId: a.id, share: shares[i] }));
   interview.settings = {
@@ -635,29 +469,11 @@ export function nlToVacancyDraft(title: string, description: string): VacancyV2 
     followUpPolicy: 1,
     order: "fixed",
     introVideo: "none",
-    practiceQuestion: true,
-    pauseAllowance: 1,
+    practiceQuestion: false,
+    pauseAllowance: 0,
     reviewBeforeSubmit: false,
   };
   pipeline.push(interview);
-
-  if (credentialHit) {
-    const doc = createBlock("doc_verification", order++);
-    doc.title = "Document verification";
-    doc.candidateIntro = "The role names a formal qualification, so we verify the document you referenced. Sources are checked, then deleted per the retention notice — a mismatch flags a human, it never auto-rejects.";
-    doc.scored = false;
-    doc.estimatedMinutes = 5;
-    doc.measures = [];
-    doc.settings = {
-      kind: "doc_verification",
-      requiredDocuments: [{ id: "doc-qual", label: "Diploma or certification named in the role description" }],
-      acceptedFormats: ["pdf", "jpg", "png"],
-      mode: "auto_extract_match",
-      idCheck: false,
-      placement: "post_shortlist",
-    };
-    pipeline.push(doc);
-  }
 
   return { ...draft, profile, categories, pipeline };
 }

@@ -1,118 +1,156 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
-import { Users, Briefcase, Zap, CornerDownLeft } from "lucide-react";
-import { candidates, vacancies } from "@/lib/fixtures";
+import {
+  Briefcase,
+  CornerDownLeft,
+  LayoutDashboard,
+  Plus,
+} from "lucide-react";
 
-const Ctx = createContext<{ open: () => void }>({ open: () => {} });
-export const useCommandK = () => useContext(Ctx);
+const Context = createContext<{ open: () => void }>({ open: () => {} });
+export const useCommandK = () => useContext(Context);
 
-type Item = { icon: "user" | "vacancy" | "action"; label: string; hint?: string; href: string };
-type Tab = "Candidates" | "Vacancies" | "Actions";
-
-const actions: Item[] = [
-  { icon: "action", label: "Create vacancy", hint: "C V", href: "/vacancies/new" },
-  { icon: "action", label: "Open bias dashboard", href: "/bias" },
-  { icon: "action", label: "Open audit log", href: "/audit" },
-  { icon: "action", label: "Review queue", href: "/dashboard" },
+const items = [
+  {
+    icon: LayoutDashboard,
+    label: "Dashboard",
+    hint: "/dashboard",
+    href: "/dashboard",
+  },
+  {
+    icon: Briefcase,
+    label: "Vacancies",
+    hint: "/vacancies",
+    href: "/vacancies",
+  },
+  {
+    icon: Plus,
+    label: "Create vacancy",
+    hint: "/vacancies/new",
+    href: "/vacancies/new",
+  },
 ];
 
-export default function CommandKProvider({ children }: { children: React.ReactNode }) {
+export default function CommandKProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [isOpen, setIsOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>("Candidates");
-  const [q, setQ] = useState("");
+  const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const router = useRouter();
-
-  const open = useCallback(() => { setIsOpen(true); setQ(""); setActive(0); }, []);
+  const open = useCallback(() => {
+    setIsOpen(true);
+    setQuery("");
+    setActive(0);
+  }, []);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setIsOpen((v) => !v);
-        setQ("");
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setIsOpen((value) => !value);
+        setQuery("");
         setActive(0);
       }
-      if (e.key === "Escape") setIsOpen(false);
+      if (event.key === "Escape") setIsOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const items = useMemo<Item[]>(() => {
-    const pool: Item[] =
-      tab === "Candidates"
-        ? candidates.map((c) => ({ icon: "user" as const, label: c.internalId, hint: `rank ${c.rank} · ${c.overall}`, href: `/vacancies/vac-001/candidates/${c.internalId}` }))
-        : tab === "Vacancies"
-          ? vacancies.map((v) => ({ icon: "vacancy" as const, label: v.title, hint: v.code, href: `/vacancies/${v.id}/ranking` }))
-          : actions;
-    const needle = q.trim().toLowerCase();
-    return needle ? pool.filter((i) => i.label.toLowerCase().includes(needle) || i.hint?.toLowerCase().includes(needle)) : pool;
-  }, [tab, q]);
+  const visibleItems = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return needle
+      ? items.filter(
+          (item) =>
+            item.label.toLowerCase().includes(needle) ||
+            item.hint.includes(needle),
+        )
+      : items;
+  }, [query]);
 
-  const go = (item: Item) => { setIsOpen(false); router.push(item.href); };
+  const go = (href: string) => {
+    setIsOpen(false);
+    router.push(href);
+  };
 
   return (
-    <Ctx.Provider value={{ open }}>
+    <Context.Provider value={{ open }}>
       {children}
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60" onClick={() => setIsOpen(false)}>
+        <div
+          className="fixed inset-0 z-50 bg-black/60 px-4"
+          onClick={() => setIsOpen(false)}
+        >
           <div
-            className="mx-auto mt-[14vh] w-[640px] overflow-hidden rounded-xl border border-hairline-strong bg-surface2 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="mx-auto mt-[14vh] w-full max-w-[560px] overflow-hidden rounded-xl border border-hairline-strong bg-surface2 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="h-px w-full iris-line opacity-70" />
             <input
               autoFocus
-              value={q}
-              onChange={(e) => { setQ(e.target.value); setActive(0); }}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowDown") setActive((a) => Math.min(a + 1, items.length - 1));
-                if (e.key === "ArrowUp") setActive((a) => Math.max(a - 1, 0));
-                if (e.key === "Enter" && items[active]) go(items[active]);
-                if (e.key === "Tab") {
-                  e.preventDefault();
-                  const order: Tab[] = ["Candidates", "Vacancies", "Actions"];
-                  setTab(order[(order.indexOf(tab) + 1) % 3]);
-                  setActive(0);
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setActive(0);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  setActive((value) =>
+                    Math.min(value + 1, visibleItems.length - 1),
+                  );
+                }
+                if (event.key === "ArrowUp") {
+                  setActive((value) => Math.max(value - 1, 0));
+                }
+                if (event.key === "Enter" && visibleItems[active]) {
+                  go(visibleItems[active].href);
                 }
               }}
               className="w-full border-b border-hairline bg-transparent px-5 py-4 font-mono text-[14px] text-hi placeholder:text-lo focus:outline-none"
-              placeholder="Type a command or search…"
+              placeholder="Jump to a real workspace route…"
             />
-            <div className="flex gap-1 border-b border-hairline px-3 py-2">
-              {(["Candidates", "Vacancies", "Actions"] as Tab[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => { setTab(t); setActive(0); }}
-                  className={`rounded px-2.5 py-1 text-[12px] ${t === tab ? "bg-white/5 text-hi" : "text-lo hover:text-mid"}`}
-                >
-                  {t}
-                </button>
-              ))}
-              <span className="ml-auto self-center font-mono text-[10px] text-lo">TAB SWITCHES · ↑↓ · ↵</span>
-            </div>
             <div className="max-h-[320px] overflow-y-auto py-1.5">
-              {items.length === 0 && <div className="px-5 py-6 text-center text-[13px] text-lo">Nothing matches “{q}”.</div>}
-              {items.map((item, i) => (
+              {visibleItems.length === 0 && (
+                <div className="px-5 py-6 text-center text-[13px] text-lo">
+                  No route matches “{query}”.
+                </div>
+              )}
+              {visibleItems.map((item, index) => (
                 <button
-                  key={item.label}
-                  onClick={() => go(item)}
-                  onMouseEnter={() => setActive(i)}
-                  className={`flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13px] ${i === active ? "bg-white/5 text-hi" : "text-mid"}`}
+                  key={item.href}
+                  type="button"
+                  onClick={() => go(item.href)}
+                  onMouseEnter={() => setActive(index)}
+                  className={`flex w-full items-center gap-3 px-5 py-3 text-left text-[13px] ${
+                    index === active ? "bg-white/5 text-hi" : "text-mid"
+                  }`}
                 >
-                  {item.icon === "user" ? <Users className="size-4 text-lo" /> : item.icon === "vacancy" ? <Briefcase className="size-4 text-lo" /> : <Zap className="size-4 text-lo" />}
-                  <span className={item.icon === "user" ? "font-mono" : ""}>{item.label}</span>
-                  {item.hint && <span className="ml-auto font-mono text-[11px] text-lo">{item.hint}</span>}
-                  {i === active && <CornerDownLeft className="size-3.5 text-lo" />}
+                  <item.icon className="size-4 text-lo" />
+                  <span>{item.label}</span>
+                  <span className="ml-auto font-mono text-[10px] text-lo">
+                    {item.hint}
+                  </span>
+                  {index === active && (
+                    <CornerDownLeft className="size-3.5 text-lo" />
+                  )}
                 </button>
               ))}
             </div>
           </div>
         </div>
       )}
-    </Ctx.Provider>
+    </Context.Provider>
   );
 }
