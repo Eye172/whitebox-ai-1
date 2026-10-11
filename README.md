@@ -1,5 +1,15 @@
 # WhiteBox AI
 
+**Development paused.** Built by [Shakhnazar Akhmer / Eye172](https://github.com/Eye172)
+and [Nurkhan Aimukatov / pip00sya](https://github.com/pip00sya), team **QwertyS**,
+for National Founder Cup. Participation without a prize.
+
+[Product showcase, screenshots and demo](https://github.com/Eye172/whitebox-ai-showcase)
+· [Companion showcase](https://github.com/pip00sya/whitebox-ai-showcase)
+
+The default `p0-p1-build` branch contains the assessment-studio implementation.
+`master` retains the earlier prototype; `pitch-deck-demo-video` holds competition materials.
+
 WhiteBox AI is an explainable, human-in-the-loop hiring application for
 job-related, multi-stage assessment. A vacancy freezes its job analysis,
 criteria, evidence methods, assessment stages, BARS rubrics, weights and
