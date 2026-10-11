@@ -1,0 +1,50 @@
+{
+  "from": "Eye172/whitebox-ai-showcase",
+  "source_commit": "adc0068d4f755538e7f82eb9ddb333c25810dd25",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "sha256": "55db45c68c12c801dfe85300f9cde86165bf218ca1d09415fdc523d3e9c4eef8"
+    },
+    {
+      "path": "README.md",
+      "sha256": "785b171891221beadbd124c19d43071d3d8e9f56a23e31257cee559ab3129b6e"
+    },
+    {
+      "path": "citations.png",
+      "sha256": "df594bcb9362dbf38f1a8e18908c18874139338c9b52248de0ef5cd8415cca7b"
+    },
+    {
+      "path": "decision.png",
+      "sha256": "2af3937589a6a07b4d444251a9748aac281817734873ca0ca6145491c4a4d85c"
+    },
+    {
+      "path": "docs/HACKATHON.md",
+      "sha256": "0bb0d94539d854e68f6a9252e255fec05c136ebfaed85b3b41e9f7acdf31ea80"
+    },
+    {
+      "path": "docs/MEDIA.md",
+      "sha256": "e62be8fe87ddda39fbb3b5ed7c9f1430b0cb723350afd6abe36e33c7a081dbb3"
+    },
+    {
+      "path": "docs/media-manifest.json",
+      "sha256": "dca461f023680d1e6ec05517e7999542f88d1a317d7544141d22b09ed7ae3ef9"
+    },
+    {
+      "path": "media/WhiteBoxAI-NFC-2026.pdf",
+      "sha256": "2d1f55adfaae8e43c4f0be0ebf11738ab20c460eca7b70b8dfa3472b6462b380"
+    },
+    {
+      "path": "media/whitebox-demo.mp4",
+      "sha256": "3e35087429929cfea0b195caf86bd23962c95c9b6a3adfd24edf5428b1a80c04"
+    },
+    {
+      "path": "scorecard.png",
+      "sha256": "8ce91f35f14e7f6408d75bc73253eacb2c82ef2242647b8d9ceeed677cb0401b"
+    },
+    {
+      "path": "studio.png",
+      "sha256": "c7f1ef0fb9283063d9c779a0512e8c24be8164fd7d9e806a5f702e01cb7f762f"
+    }
+  ]
+}

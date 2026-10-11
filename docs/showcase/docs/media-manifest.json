@@ -1,0 +1,32 @@
+[
+  {
+    "file": "citations.png",
+    "bytes": 734418,
+    "sha256": "df594bcb9362dbf38f1a8e18908c18874139338c9b52248de0ef5cd8415cca7b"
+  },
+  {
+    "file": "decision.png",
+    "bytes": 894328,
+    "sha256": "2af3937589a6a07b4d444251a9748aac281817734873ca0ca6145491c4a4d85c"
+  },
+  {
+    "file": "media/whitebox-demo.mp4",
+    "bytes": 29609761,
+    "sha256": "3e35087429929cfea0b195caf86bd23962c95c9b6a3adfd24edf5428b1a80c04"
+  },
+  {
+    "file": "media/WhiteBoxAI-NFC-2026.pdf",
+    "bytes": 1407355,
+    "sha256": "2d1f55adfaae8e43c4f0be0ebf11738ab20c460eca7b70b8dfa3472b6462b380"
+  },
+  {
+    "file": "scorecard.png",
+    "bytes": 832193,
+    "sha256": "8ce91f35f14e7f6408d75bc73253eacb2c82ef2242647b8d9ceeed677cb0401b"
+  },
+  {
+    "file": "studio.png",
+    "bytes": 513704,
+    "sha256": "c7f1ef0fb9283063d9c779a0512e8c24be8164fd7d9e806a5f702e01cb7f762f"
+  }
+]
