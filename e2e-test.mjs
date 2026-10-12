@@ -307,7 +307,7 @@ try {
   );
   await page.getByText("CAMERA READY").waitFor({ state: "visible", timeout: 20_000 });
   await page
-    .getByText("Temporary question-generation failure.")
+    .getByText("The connection was interrupted. The latest saved interview state is now loaded.")
     .waitFor({ state: "visible", timeout: 20_000 });
 
   const startBeforeQuestion = page.getByRole("button", {
@@ -346,6 +346,7 @@ try {
   assert.equal(retryBody.application?.currentTurnNumber, 1);
   await page
     .getByText(retryBody.step.question, { exact: true })
+    .filter({ visible: true })
     .waitFor({ state: "visible", timeout: 20_000 });
   await waitForEnabled(startBeforeQuestion);
 
@@ -492,6 +493,18 @@ try {
       name: "Verify transcript and audit",
     });
     if (!(await verifyButton.isVisible().catch(() => false))) continue;
+    // The current server requires playback by this reviewer before accepting
+    // a transcript verification. Exercise the protected clip, not just the form.
+    const reviewClip = page.getByLabel(`Recorded answer for interview turn ${turnNumber}`);
+    await reviewClip.evaluate(async (clip) => {
+      clip.currentTime = 0;
+      await clip.play();
+    });
+    await page.waitForFunction(
+      (clip) => clip.ended,
+      await reviewClip.elementHandle(),
+      { timeout: 15_000 },
+    );
     await page.locator("#reviewed-transcript").fill(detailedAnswer);
     await page
       .locator("#verification-reason")
@@ -527,6 +540,8 @@ try {
     `[data-application-id="${applicationId}"]`,
   );
   await verifiedPendingRow.waitFor({ state: "visible", timeout: 20_000 });
+  const evaluatedCandidateId = await verifiedPendingRow.getByText(/^CND-[A-Z0-9]+$/).textContent();
+  assert.ok(evaluatedCandidateId, "the application must expose its pseudonymous candidate ID");
   const evaluationResponsePromise = page.waitForResponse(
     (response) => isApiResponse(response, `/applications/${applicationId}/evaluate`),
     { timeout: 60_000 },
@@ -534,13 +549,16 @@ try {
   await verifiedPendingRow
     .getByRole("button", { name: "Evaluate submitted evidence" })
     .click();
-  await responseJson(await evaluationResponsePromise, "HR evidence evaluation");
-
-  const evaluatedRow = page.locator(
-    `tr[data-application-id="${applicationId}"]`,
-  );
-  await evaluatedRow.waitFor({ state: "visible", timeout: 20_000 });
-  await evaluatedRow.locator("a").first().click();
+  const evaluated = await responseJson(await evaluationResponsePromise, "HR evidence evaluation");
+  assert.equal(evaluated.application?.id, applicationId);
+  assert.equal(evaluated.application?.stage, "needs_adjudication");
+  // Ranking summaries intentionally omit the internal application UUID.
+  const scorecardLink = page.getByRole("link", {
+    name: evaluatedCandidateId,
+    exact: true,
+  });
+  await scorecardLink.waitFor({ state: "visible", timeout: 20_000 });
+  await scorecardLink.click();
   await page.waitForURL("**/candidates/**", { timeout: 15_000 });
 
   const playbackResponsePromise = page.waitForResponse(

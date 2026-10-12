@@ -13,6 +13,25 @@ A hiring-assessment workspace in which the job criteria, candidate evidence, sco
 [Read the competition pitch deck](media/WhiteBoxAI-NFC-2026.pdf) ·
 [Competition and version record](docs/HACKATHON.md)
 
+## See authoring, evidence and the human decision
+
+[![The recorded WhiteBox studio walkthrough begins with the job and assessment configuration.](media/demo-preview.jpg)](media/whitebox-demo.mp4)
+
+**[▶ Open the 1:24 studio walkthrough](media/whitebox-demo.mp4)** ·
+[Run the public studio](https://github.com/pip00sya/whitebox-ai#run-the-studio-locally) ·
+[Technical walkthrough](docs/TECHNICAL.md)
+
+Approximate scene positions: **0:15** vacancy authoring, **0:31** invitation,
+**0:48** recorded interview, **1:05** evidence review and **1:18** candidate review.
+It is a retained development demonstration with scripted job answers, not a
+real recruitment decision or a new production-validity study.
+
+[![The original National Founder Cup presentation cover.](media/pitch-preview.jpg)](media/WhiteBoxAI-NFC-2026.pdf)
+
+[Competition deck — PDF](media/WhiteBoxAI-NFC-2026.pdf) ·
+[Editable deck — PPTX](media/WhiteBoxAI-NFC-2026.pptx).
+The competition pitch and later studio are different versions of the project.
+
 ## Fix the criteria before reviewing the answers
 
 An assessment is difficult to audit when questions, weights or evaluation criteria quietly change between candidates. WhiteBox starts with the vacancy: job analysis, criteria, evidence methods, stages, behavioural scoring anchors, weights and governance are assembled before publication.
@@ -96,8 +115,7 @@ development-demo walkthrough, rather than a new live hiring session.
 The public [Eye172 source repository](https://github.com/Eye172/whitebox-ai-1)
 now opens on `p0-p1-build`, the studio implementation. The `master` branch and
 the earlier pitch branch preserve older prototype iterations. The
-[original public repository](https://github.com/pip00sya/whitebox-ai) is also an earlier
-snapshot, not evidence that every feature pictured here exists in that snapshot.
+[companion public repository](https://github.com/pip00sya/whitebox-ai) now also includes the later studio on `main`. Its [source-publication record](https://github.com/pip00sya/whitebox-ai/blob/main/docs/SOURCE-PUBLICATION.md) identifies that imported version; earlier snapshots remain in Git history.
 
 ---
 

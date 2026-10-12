@@ -28,5 +28,20 @@
     "file": "studio.png",
     "bytes": 513704,
     "sha256": "c7f1ef0fb9283063d9c779a0512e8c24be8164fd7d9e806a5f702e01cb7f762f"
+  },
+  {
+    "file": "media/demo-preview.jpg",
+    "bytes": 15414,
+    "sha256": "1554531f397b2ab88d7041c11407419b047b1c8213e213e6c1acdcaad8ac485d"
+  },
+  {
+    "file": "media/pitch-preview.jpg",
+    "bytes": 103049,
+    "sha256": "c87bc2f2b132f580da7a85ae2ff45a8d9683e0f7b3d7aa6e3bd9535e3d934538"
+  },
+  {
+    "file": "media/WhiteBoxAI-NFC-2026.pptx",
+    "bytes": 2786080,
+    "sha256": "001a86bb72ef942cbde2d925387eba1ac154a5644bfdd6ade359557df9432092"
   }
 ]
